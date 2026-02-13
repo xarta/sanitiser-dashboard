@@ -173,6 +173,36 @@ class FileListing(BaseModel):
 # Error
 # ===================================================================
 
+class GenerateReportsRequest(BaseModel):
+    """Request body for POST /api/runs/{run_id}/generate-reports.
+
+    Accepts the complete structured data needed to generate all 4
+    test-coverage report files with identical schema/format to the
+    doc-sanitiser originals.
+    """
+    coverage_data: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="Structured test results for test-coverage.md",
+    )
+    timing_data: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="Complete timing JSON (schema_version 2) — passed through as-is",
+    )
+    request_data: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="Complete request/response JSON (schema_version 2) for .md and .json",
+    )
+
+
+class GenerateReportsResponse(BaseModel):
+    """Response after generating reports."""
+    run_id: str
+    generated: Dict[str, str] = Field(
+        description="Map of filename → path for each generated file",
+    )
+    message: str
+
+
 class ErrorResponse(BaseModel):
     """Standard error response."""
     error: str

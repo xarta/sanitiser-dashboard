@@ -56,6 +56,8 @@ from source.models import (
     EventResponse,
     FileEntry,
     FileListing,
+    GenerateReportsRequest,
+    GenerateReportsResponse,
     HealthResponse,
     PipelineEvent,
     RequestLog,
@@ -67,6 +69,7 @@ from source.models import (
     TimingResponse,
     UpdateRunRequest,
 )
+from source.report_generator import generate_reports
 from source.run_storage import RunStorage
 
 # Configure logging
@@ -290,6 +293,61 @@ async def get_timing(run_id: str):
         return storage.get_timing(run_id)
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail=f"Run not found: {run_id}")
+
+
+# ===================================================================
+# Report generation
+# ===================================================================
+
+@app.post(
+    "/api/runs/{run_id}/generate-reports",
+    response_model=GenerateReportsResponse,
+    status_code=201,
+)
+async def generate_run_reports(run_id: str, body: GenerateReportsRequest):
+    """Generate test-coverage report files from structured data.
+
+    Accepts complete structured data blobs and generates 4 report files
+    with identical schema and format to the doc-sanitiser originals:
+
+    - test-coverage.md
+    - test-coverage-timing.json
+    - test-coverage-requests-responses.md
+    - test-coverage-requests-responses.json
+
+    Generated files are written to the run's ``reports/`` directory
+    and are browsable via the file browser UI.
+    """
+    try:
+        run_dir = storage._run_dir(run_id)
+        if not run_dir.exists():
+            raise FileNotFoundError(f"Run not found: {run_id}")
+
+        reports_dir = run_dir / "reports"
+        generated = generate_reports(
+            reports_dir,
+            coverage_data=body.coverage_data,
+            timing_data=body.timing_data,
+            request_data=body.request_data,
+        )
+
+        logger.info(
+            "Generated %d reports for run %s: %s",
+            len(generated),
+            run_id,
+            ", ".join(generated.keys()),
+        )
+
+        return GenerateReportsResponse(
+            run_id=run_id,
+            generated=generated,
+            message=f"Generated {len(generated)} report files",
+        )
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail=f"Run not found: {run_id}")
+    except Exception as exc:
+        logger.exception("Error generating reports for run %s", run_id)
+        return _error_response(500, "internal_error", str(exc))
 
 
 # ===================================================================

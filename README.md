@@ -38,6 +38,7 @@ Pipeline services push structured data during runs:
 1. **Events** — stage start/end, progress, errors (JSONL)
 2. **Request logs** — HTTP request/response entries (JSONL)
 3. **Timing data** — duration measurements per stage (JSON)
+4. **Report generation** — test coverage reports (Markdown + JSON) generated server-side from structured data
 
 ### Dashboard UI
 
@@ -102,6 +103,12 @@ curl http://localhost:8000/health
 | `GET` | `/api/runs/{run_id}/timing` | Get timing data |
 | `GET` | `/api/runs/{run_id}/stats` | Run statistics |
 
+### Report Generation
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/api/runs/{run_id}/generate-reports` | Generate test coverage reports from structured data |
+
 ### File Browser
 
 | Method | Path | Description |
@@ -125,6 +132,7 @@ sanitiser-dashboard/
 ├── source/
 │   ├── __init__.py
 │   ├── models.py                 # Pydantic models for all requests/responses
+│   ├── report_generator.py       # Server-side test coverage report generation
 │   └── run_storage.py            # Run lifecycle, event/request/timing persistence
 ├── static/
 │   ├── index.html                # Dashboard — run list, stats

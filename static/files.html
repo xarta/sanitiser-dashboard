@@ -52,6 +52,24 @@
             return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
         }
 
+        async function downloadFile(path, filename) {
+            try {
+                const data = await fetchJSON(`/api/files/${path}`);
+                if (data.content === undefined) return;
+                const blob = new Blob([data.content], {type: 'application/octet-stream'});
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            } catch (err) {
+                alert('Download failed: ' + err.message);
+            }
+        }
+
         function updateBreadcrumb(path) {
             const parts = path ? path.split('/').filter(Boolean) : [];
             let html = '<a href="#" onclick="navigate(\'\');return false;" style="color:var(--accent);text-decoration:none;">root</a>';
@@ -77,7 +95,9 @@
                 if (data.content !== undefined) {
                     // File content
                     document.getElementById('file-container').innerHTML =
-                        `<p style="color:var(--text-muted);">File: ${path} (${formatSize(data.size)})</p>`;
+                        `<p style="color:var(--text-muted);">File: ${path} (${formatSize(data.size)})` +
+                        ` <a href="#" onclick="downloadFile('${path}', ${JSON.stringify(path.split('/').pop())});return false;" ` +
+                        `style="margin-left:12px;color:var(--accent);text-decoration:none;font-size:0.9em;">⬇ Download</a></p>`;
                     document.getElementById('preview-section').style.display = '';
                     document.getElementById('preview-content').textContent = data.content;
                     return;
@@ -107,6 +127,9 @@
                     html += `<li class="file-item">`;
                     html += `<span class="file-icon">${icon}</span>`;
                     html += `<span class="file-name"><a href="#" onclick="navigate('${entry.path}');return false;">${entry.name}</a></span>`;
+                    if (entry.type === 'file') {
+                        html += `<span class="file-download"><a href="#" onclick="downloadFile('${entry.path}','${entry.name}');return false;" title="Download" style="color:var(--accent);text-decoration:none;">⬇</a></span>`;
+                    }
                     html += `<span class="file-size">${formatSize(entry.size)}</span>`;
                     html += '</li>';
                 }

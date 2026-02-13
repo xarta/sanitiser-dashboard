@@ -11,7 +11,7 @@
         <h1>Doc-Sanitiser Dashboard</h1>
         <p class="subtitle">Pipeline runs, events, and diagnostics</p>
 
-        <nav>
+        <nav id="main-nav">
             <a href="/ui/" class="active">Dashboard</a>
             <a href="/ui/files.html">File Browser</a>
         </nav>
@@ -120,6 +120,21 @@
         // Auto-refresh every 10 seconds
         loadDashboard();
         setInterval(loadDashboard, 10000);
+
+        // Load deployment config and add back-link if configured
+        fetch(`${API_BASE}/api/config`)
+            .then(r => r.json())
+            .then(cfg => {
+                if (cfg.control_hub_url) {
+                    const nav = document.getElementById('main-nav');
+                    const link = document.createElement('a');
+                    link.href = cfg.control_hub_url;
+                    link.textContent = '← Control Hub';
+                    link.className = 'back-link';
+                    nav.insertBefore(link, nav.firstChild);
+                }
+            })
+            .catch(() => {});
     </script>
 </body>
 </html>

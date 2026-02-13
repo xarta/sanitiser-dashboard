@@ -26,11 +26,15 @@ Endpoints:
   GET    /api/files                     — list files in data volume
   GET    /api/files/{path}              — read file content
 
+  GET    /api/config                    — client-side deployment config
+  GET    /api/info                      — service metadata
+
   GET    /ui/*                          — dashboard UI (static HTML)
 
 Environment variables:
-  DATA_PATH    — path to persistent data volume (default: /app/data)
-  LOG_LEVEL    — logging level (default: INFO)
+  DATA_PATH        — path to persistent data volume (default: /app/data)
+  LOG_LEVEL        — logging level (default: INFO)
+  CONTROL_HUB_URL  — URL to AI Control Hub for back-link in UI (optional)
 """
 
 import json
@@ -80,10 +84,12 @@ logger = logging.getLogger("sanitiser-dashboard")
 
 DATA_PATH = Path(os.getenv("DATA_PATH", "/app/data"))
 STATIC_PATH = Path(os.getenv("STATIC_PATH", "/app/static"))
+CONTROL_HUB_URL = os.getenv("CONTROL_HUB_URL", "").strip()
 
 logger.info("Configuration:")
 logger.info("  DATA_PATH: %s", DATA_PATH)
 logger.info("  STATIC_PATH: %s", STATIC_PATH)
+logger.info("  CONTROL_HUB_URL: %s", CONTROL_HUB_URL or "(not set)")
 
 # ===================================================================
 # Initialise storage
@@ -145,6 +151,19 @@ async def health():
 async def service_info():
     """Service metadata."""
     return ServiceInfo()
+
+
+@app.get("/api/config")
+async def client_config():
+    """Client-side configuration — returns deployment-specific settings.
+
+    Values come from environment variables set in the stack config,
+    keeping the source code free of infrastructure-specific URLs.
+    """
+    config = {}
+    if CONTROL_HUB_URL:
+        config["control_hub_url"] = CONTROL_HUB_URL
+    return config
 
 
 # ===================================================================

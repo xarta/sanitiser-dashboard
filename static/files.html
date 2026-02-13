@@ -11,7 +11,7 @@
         <h1>File Browser</h1>
         <p class="subtitle">Browse pipeline data volume</p>
 
-        <nav>
+        <nav id="main-nav">
             <a href="/ui/">Dashboard</a>
             <a href="/ui/files.html" class="active">File Browser</a>
         </nav>
@@ -124,6 +124,21 @@
         const urlParams = new URLSearchParams(window.location.search);
         const initialPath = urlParams.get('path') || '';
         navigate(initialPath);
+
+        // Load deployment config and add back-link if configured
+        fetch(`${API_BASE}/api/config`)
+            .then(r => r.json())
+            .then(cfg => {
+                if (cfg.control_hub_url) {
+                    const nav = document.getElementById('main-nav');
+                    const link = document.createElement('a');
+                    link.href = cfg.control_hub_url;
+                    link.textContent = '← Control Hub';
+                    link.className = 'back-link';
+                    nav.insertBefore(link, nav.firstChild);
+                }
+            })
+            .catch(() => {});
     </script>
 </body>
 </html>

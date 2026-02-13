@@ -315,6 +315,18 @@ nav a.active {
     background: var(--accent-dim);
 }
 
+nav a.back-link {
+    margin-right: auto;
+    color: var(--text-muted);
+    opacity: 0.7;
+    font-size: 0.85em;
+}
+nav a.back-link:hover {
+    opacity: 1;
+    color: var(--accent);
+    background: var(--accent-dim);
+}
+
 /* Code/pre */
 pre, code {
     font-family: var(--mono);

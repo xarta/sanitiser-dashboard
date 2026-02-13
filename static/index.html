@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Doc-Sanitiser Dashboard</title>
+    <link rel="stylesheet" href="/ui/css/dashboard.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Doc-Sanitiser Dashboard</h1>
+        <p class="subtitle">Pipeline runs, events, and diagnostics</p>
+
+        <nav>
+            <a href="/ui/" class="active">Dashboard</a>
+            <a href="/ui/files.html">File Browser</a>
+        </nav>
+
+        <!-- Stats -->
+        <div class="stats-row" id="stats">
+            <div class="stat-card">
+                <div class="value" id="stat-total">-</div>
+                <div class="label">Total Runs</div>
+            </div>
+            <div class="stat-card">
+                <div class="value" id="stat-completed">-</div>
+                <div class="label">Completed</div>
+            </div>
+            <div class="stat-card">
+                <div class="value" id="stat-running">-</div>
+                <div class="label">Running</div>
+            </div>
+            <div class="stat-card">
+                <div class="value" id="stat-failed">-</div>
+                <div class="label">Failed</div>
+            </div>
+        </div>
+
+        <!-- Runs table -->
+        <div class="section">
+            <h2>Pipeline Runs</h2>
+            <div id="runs-container">
+                <div class="loading"><div class="spinner"></div><p>Loading runs...</p></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = window.location.origin;
+
+        async function fetchJSON(path) {
+            const resp = await fetch(`${API_BASE}${path}`);
+            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+            return resp.json();
+        }
+
+        function formatTime(iso) {
+            if (!iso) return '-';
+            const d = new Date(iso);
+            return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }) + ' ' +
+                   d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        }
+
+        function statusBadge(status) {
+            return `<span class="status status-${status}">${status}</span>`;
+        }
+
+        async function loadDashboard() {
+            try {
+                // Load health for stats
+                const health = await fetchJSON('/health');
+                document.getElementById('stat-total').textContent = health.runs_count || 0;
+
+                // Load runs
+                const runs = await fetchJSON('/api/runs');
+
+                // Calculate stats
+                const completed = runs.filter(r => r.status === 'completed').length;
+                const running = runs.filter(r => r.status === 'running').length;
+                const failed = runs.filter(r => r.status === 'failed').length;
+
+                document.getElementById('stat-completed').textContent = completed;
+                document.getElementById('stat-running').textContent = running;
+                document.getElementById('stat-failed').textContent = failed;
+
+                // Build table
+                const container = document.getElementById('runs-container');
+
+                if (runs.length === 0) {
+                    container.innerHTML = '<p style="color: var(--text-muted); text-align: center; padding: 30px;">No pipeline runs yet. Push data via the API to see runs here.</p>';
+                    return;
+                }
+
+                let html = '<table class="run-table">';
+                html += '<thead><tr>';
+                html += '<th>Run ID</th><th>Target</th><th>Mode</th><th>Status</th><th>Created</th><th>Events</th><th>Requests</th>';
+                html += '</tr></thead><tbody>';
+
+                for (const run of runs) {
+                    html += '<tr>';
+                    html += `<td><a href="/ui/run.html?id=${run.run_id}">${run.run_id}</a></td>`;
+                    html += `<td>${run.target}</td>`;
+                    html += `<td>${run.mode}</td>`;
+                    html += `<td>${statusBadge(run.status)}</td>`;
+                    html += `<td>${formatTime(run.created)}</td>`;
+                    html += `<td>${run.event_count}</td>`;
+                    html += `<td>${run.request_count}</td>`;
+                    html += '</tr>';
+                }
+
+                html += '</tbody></table>';
+                container.innerHTML = html;
+
+            } catch (err) {
+                document.getElementById('runs-container').innerHTML =
+                    `<p style="color: var(--error);">Error loading data: ${err.message}</p>`;
+            }
+        }
+
+        // Auto-refresh every 10 seconds
+        loadDashboard();
+        setInterval(loadDashboard, 10000);
+    </script>
+</body>
+</html>

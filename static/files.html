@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>File Browser — Doc-Sanitiser Dashboard</title>
+    <link rel="stylesheet" href="/ui/css/dashboard.css">
+</head>
+<body>
+    <div class="container">
+        <h1>File Browser</h1>
+        <p class="subtitle">Browse pipeline data volume</p>
+
+        <nav>
+            <a href="/ui/">Dashboard</a>
+            <a href="/ui/files.html" class="active">File Browser</a>
+        </nav>
+
+        <!-- Breadcrumb -->
+        <div class="section" style="padding:10px 15px;">
+            <span id="breadcrumb" style="font-family:var(--mono);font-size:0.9em;"></span>
+        </div>
+
+        <!-- File listing -->
+        <div class="section">
+            <div id="file-container">
+                <div class="loading"><div class="spinner"></div><p>Loading...</p></div>
+            </div>
+        </div>
+
+        <!-- File preview -->
+        <div class="section" id="preview-section" style="display:none;">
+            <h2>Preview</h2>
+            <pre id="preview-content"></pre>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = window.location.origin;
+        let currentPath = '';
+
+        async function fetchJSON(path) {
+            const resp = await fetch(`${API_BASE}${path}`);
+            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+            return resp.json();
+        }
+
+        function formatSize(bytes) {
+            if (bytes == null) return '-';
+            if (bytes < 1024) return `${bytes} B`;
+            if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+            return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+        }
+
+        function updateBreadcrumb(path) {
+            const parts = path ? path.split('/').filter(Boolean) : [];
+            let html = '<a href="#" onclick="navigate(\'\');return false;" style="color:var(--accent);text-decoration:none;">root</a>';
+            let accumulated = '';
+            for (const part of parts) {
+                accumulated += (accumulated ? '/' : '') + part;
+                const p = accumulated;
+                html += ` / <a href="#" onclick="navigate('${p}');return false;" style="color:var(--accent);text-decoration:none;">${part}</a>`;
+            }
+            document.getElementById('breadcrumb').innerHTML = html;
+        }
+
+        async function navigate(path) {
+            currentPath = path;
+            updateBreadcrumb(path);
+            document.getElementById('preview-section').style.display = 'none';
+
+            try {
+                const apiPath = path ? `/api/files/${path}` : '/api/files';
+                const data = await fetchJSON(apiPath);
+
+                // Check if it's a file (has content) or directory (has entries)
+                if (data.content !== undefined) {
+                    // File content
+                    document.getElementById('file-container').innerHTML =
+                        `<p style="color:var(--text-muted);">File: ${path} (${formatSize(data.size)})</p>`;
+                    document.getElementById('preview-section').style.display = '';
+                    document.getElementById('preview-content').textContent = data.content;
+                    return;
+                }
+
+                // Directory listing
+                const entries = data.entries || [];
+                if (entries.length === 0) {
+                    document.getElementById('file-container').innerHTML =
+                        '<p style="color:var(--text-muted);text-align:center;padding:20px;">Empty directory</p>';
+                    return;
+                }
+
+                let html = '<ul class="file-list">';
+
+                // Parent link
+                if (path) {
+                    const parent = path.split('/').slice(0, -1).join('/');
+                    html += `<li class="file-item">`;
+                    html += `<span class="file-icon">📁</span>`;
+                    html += `<span class="file-name"><a href="#" onclick="navigate('${parent}');return false;">..</a></span>`;
+                    html += '</li>';
+                }
+
+                for (const entry of entries) {
+                    const icon = entry.type === 'directory' ? '📁' : '📄';
+                    html += `<li class="file-item">`;
+                    html += `<span class="file-icon">${icon}</span>`;
+                    html += `<span class="file-name"><a href="#" onclick="navigate('${entry.path}');return false;">${entry.name}</a></span>`;
+                    html += `<span class="file-size">${formatSize(entry.size)}</span>`;
+                    html += '</li>';
+                }
+
+                html += '</ul>';
+                document.getElementById('file-container').innerHTML = html;
+
+            } catch (err) {
+                document.getElementById('file-container').innerHTML =
+                    `<p style="color:var(--error);">Error: ${err.message}</p>`;
+            }
+        }
+
+        // Initial load
+        const urlParams = new URLSearchParams(window.location.search);
+        const initialPath = urlParams.get('path') || '';
+        navigate(initialPath);
+    </script>
+</body>
+</html>

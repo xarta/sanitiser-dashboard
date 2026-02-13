@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Run Detail — Doc-Sanitiser Dashboard</title>
+    <link rel="stylesheet" href="/ui/css/dashboard.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Run Detail</h1>
+        <p class="subtitle" id="run-subtitle">Loading...</p>
+
+        <nav>
+            <a href="/ui/">Dashboard</a>
+            <a href="#" class="active">Run Detail</a>
+            <a href="/ui/files.html">File Browser</a>
+        </nav>
+
+        <!-- Run info -->
+        <div class="section" id="run-info">
+            <h2>Run Information</h2>
+            <div class="loading"><div class="spinner"></div></div>
+        </div>
+
+        <!-- Timing -->
+        <div class="section" id="timing-section" style="display:none;">
+            <h2>Timing</h2>
+            <div id="timing-container"></div>
+        </div>
+
+        <!-- Events -->
+        <div class="section" id="events-section" style="display:none;">
+            <h2>Events</h2>
+            <div id="events-container"></div>
+        </div>
+
+        <!-- Requests -->
+        <div class="section" id="requests-section" style="display:none;">
+            <h2>HTTP Requests</h2>
+            <div id="requests-container"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = window.location.origin;
+        const params = new URLSearchParams(window.location.search);
+        const runId = params.get('id');
+
+        async function fetchJSON(path) {
+            const resp = await fetch(`${API_BASE}${path}`);
+            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+            return resp.json();
+        }
+
+        function formatTime(iso) {
+            if (!iso) return '-';
+            const d = new Date(iso);
+            return d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) +
+                   '.' + String(d.getMilliseconds()).padStart(3, '0');
+        }
+
+        function formatDuration(ms) {
+            if (ms == null) return '-';
+            if (ms < 1000) return `${Math.round(ms)}ms`;
+            return `${(ms / 1000).toFixed(1)}s`;
+        }
+
+        function statusBadge(status) {
+            return `<span class="status status-${status}">${status}</span>`;
+        }
+
+        async function loadRun() {
+            if (!runId) {
+                document.getElementById('run-subtitle').textContent = 'No run ID specified';
+                return;
+            }
+
+            try {
+                // Load run detail
+                const run = await fetchJSON(`/api/runs/${runId}`);
+                document.getElementById('run-subtitle').textContent = `${runId} — ${run.target}`;
+
+                let infoHtml = '<table class="run-table">';
+                infoHtml += `<tr><td><strong>Run ID</strong></td><td>${run.run_id}</td></tr>`;
+                infoHtml += `<tr><td><strong>Target</strong></td><td>${run.target}</td></tr>`;
+                infoHtml += `<tr><td><strong>Mode</strong></td><td>${run.mode}</td></tr>`;
+                infoHtml += `<tr><td><strong>Status</strong></td><td>${statusBadge(run.status)}</td></tr>`;
+                infoHtml += `<tr><td><strong>Created</strong></td><td>${run.created}</td></tr>`;
+                infoHtml += `<tr><td><strong>Updated</strong></td><td>${run.updated || '-'}</td></tr>`;
+                infoHtml += `<tr><td><strong>Events</strong></td><td>${run.event_count}</td></tr>`;
+                infoHtml += `<tr><td><strong>Requests</strong></td><td>${run.request_count}</td></tr>`;
+                infoHtml += `<tr><td><strong>Timing entries</strong></td><td>${run.timing_count}</td></tr>`;
+                if (run.description) {
+                    infoHtml += `<tr><td><strong>Description</strong></td><td>${run.description}</td></tr>`;
+                }
+                infoHtml += '</table>';
+
+                if (run.summary) {
+                    infoHtml += '<h3 style="color:var(--accent);margin:15px 0 10px;">Summary</h3>';
+                    infoHtml += `<pre>${JSON.stringify(run.summary, null, 2)}</pre>`;
+                }
+                document.getElementById('run-info').innerHTML = '<h2>Run Information</h2>' + infoHtml;
+
+                // Load events
+                if (run.event_count > 0) {
+                    const events = await fetchJSON(`/api/runs/${runId}/events`);
+                    const evSection = document.getElementById('events-section');
+                    evSection.style.display = '';
+                    let evHtml = '<ul class="event-list">';
+                    for (const ev of events) {
+                        evHtml += `<li class="event-item">`;
+                        evHtml += `<span class="event-time">${formatTime(ev.timestamp)}</span>`;
+                        evHtml += `<span class="event-type event-type-${ev.event_type}">${ev.event_type}</span>`;
+                        if (ev.stage_name) evHtml += `<span><strong>[${ev.stage_name}]</strong></span>`;
+                        evHtml += `<span>${ev.message}</span>`;
+                        if (ev.duration_ms != null) evHtml += `<span style="color:var(--text-muted)">(${formatDuration(ev.duration_ms)})</span>`;
+                        evHtml += '</li>';
+                    }
+                    evHtml += '</ul>';
+                    document.getElementById('events-container').innerHTML = evHtml;
+                }
+
+                // Load requests
+                if (run.request_count > 0) {
+                    const requests = await fetchJSON(`/api/runs/${runId}/requests`);
+                    const reqSection = document.getElementById('requests-section');
+                    reqSection.style.display = '';
+                    let reqHtml = '<table class="run-table">';
+                    reqHtml += '<thead><tr><th>#</th><th>Service</th><th>Method</th><th>URL</th><th>Status</th><th>Duration</th></tr></thead><tbody>';
+                    for (const req of requests) {
+                        const statusColor = req.response_status >= 400 ? 'var(--error)' : 'var(--success)';
+                        reqHtml += '<tr>';
+                        reqHtml += `<td>${req.sequence || '-'}</td>`;
+                        reqHtml += `<td>${req.service}</td>`;
+                        reqHtml += `<td>${req.method}</td>`;
+                        reqHtml += `<td style="font-family:var(--mono);font-size:0.8em;">${req.url}</td>`;
+                        reqHtml += `<td style="color:${statusColor}">${req.response_status || '-'}</td>`;
+                        reqHtml += `<td>${formatDuration(req.duration_ms)}</td>`;
+                        reqHtml += '</tr>';
+                    }
+                    reqHtml += '</tbody></table>';
+                    document.getElementById('requests-container').innerHTML = reqHtml;
+                }
+
+                // Load timing
+                if (run.timing_count > 0) {
+                    const timing = await fetchJSON(`/api/runs/${runId}/timing`);
+                    const timSection = document.getElementById('timing-section');
+                    timSection.style.display = '';
+
+                    // Find max duration for scaling
+                    const maxDur = Math.max(...timing.map(t => t.duration_ms || 0), 1);
+
+                    let timHtml = '<div style="padding:10px 0;">';
+                    for (const t of timing) {
+                        const pct = Math.max(((t.duration_ms || 0) / maxDur) * 100, 5);
+                        const label = t.stage_name || t.operation || `Stage ${t.stage}`;
+                        timHtml += `<div class="timing-bar" style="width:${pct}%">`;
+                        timHtml += `<span class="timing-label">${label}</span>`;
+                        timHtml += `<span class="timing-duration">${formatDuration(t.duration_ms)}</span>`;
+                        timHtml += '</div>';
+                    }
+                    timHtml += '</div>';
+                    document.getElementById('timing-container').innerHTML = timHtml;
+                }
+
+            } catch (err) {
+                document.getElementById('run-info').innerHTML =
+                    `<h2>Run Information</h2><p style="color:var(--error);">Error: ${err.message}</p>`;
+            }
+        }
+
+        loadRun();
+    </script>
+</body>
+</html>

@@ -81,6 +81,7 @@ curl http://localhost:8000/health
 | `GET` | `/` | Redirect to dashboard UI |
 | `GET` | `/health` | Health check |
 | `GET` | `/api/info` | Service metadata |
+| `GET` | `/api/config` | Client-side configuration |
 
 ### Runs
 
@@ -90,6 +91,7 @@ curl http://localhost:8000/health
 | `GET` | `/api/runs` | List all runs |
 | `GET` | `/api/runs/{run_id}` | Get run details |
 | `PATCH` | `/api/runs/{run_id}` | Update run status |
+| `DELETE` | `/api/runs/{run_id}` | Delete a run and all its data |
 
 ### Events & Logs
 
@@ -99,9 +101,9 @@ curl http://localhost:8000/health
 | `GET` | `/api/runs/{run_id}/events` | Get events for a run |
 | `POST` | `/api/runs/{run_id}/requests` | Push request log |
 | `GET` | `/api/runs/{run_id}/requests` | Get request logs |
+| `POST` | `/api/runs/{run_id}/requests/query` | Query/filter request logs with server-side filtering |
 | `POST` | `/api/runs/{run_id}/timing` | Push timing data |
 | `GET` | `/api/runs/{run_id}/timing` | Get timing data |
-| `GET` | `/api/runs/{run_id}/stats` | Run statistics |
 
 ### Report Generation
 

@@ -170,6 +170,140 @@ class TestDashboardEndpoints(unittest.TestCase):
         # Either 403 (caught by traversal check) or 404 (path normalised and not found)
         self.assertIn(resp.status_code, (403, 404))
 
+    # ---------------------------------------------------------------
+    # Request query endpoint
+    # ---------------------------------------------------------------
+
+    def _create_run_with_requests(self):
+        """Helper: create a run and push sample request logs."""
+        create_resp = self.client.post("/api/runs", json={"target": "test", "mode": "test"})
+        run_id = create_resp.json()["run_id"]
+
+        # Push varied request logs
+        self.client.post(f"/api/runs/{run_id}/requests", json={
+            "service": "llm",
+            "method": "POST",
+            "url": "http://h/v1/chat/completions",
+            "response_status": 200,
+            "duration_ms": 50.0,
+            "test_context": "test_llm.TestLLM.test_chat",
+            "request_body": {"messages": [{"role": "user", "content": "restart the service"}]},
+            "response_body": {"choices": [{"message": {"content": "ok"}}]},
+        })
+        self.client.post(f"/api/runs/{run_id}/requests", json={
+            "service": "embedding",
+            "method": "POST",
+            "url": "http://h/v1/embeddings",
+            "response_status": 200,
+            "duration_ms": 15.0,
+            "test_context": "test_emb.TestEmb.test_batch",
+            "request_body": {"input": ["hello"]},
+            "response_body": {"data": [{"embedding": [0.1, 0.2]}]},
+        })
+        self.client.post(f"/api/runs/{run_id}/requests", json={
+            "service": "llm",
+            "method": "POST",
+            "url": "http://h/v1/chat/completions",
+            "response_status": 429,
+            "duration_ms": 1000.0,
+            "test_context": "test_llm.TestLLM.test_retry",
+            "request_body": {"messages": []},
+            "response_body": None,
+            "error": "Rate limited",
+        })
+        return run_id
+
+    def test_query_requests_no_filter(self):
+        """POST /api/runs/{run_id}/requests/query returns all when no filters."""
+        run_id = self._create_run_with_requests()
+        resp = self.client.post(f"/api/runs/{run_id}/requests/query", json={})
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(data["total"], 3)
+        self.assertEqual(data["matched"], 3)
+
+    def test_query_requests_by_endpoint(self):
+        """Filter by endpoint_type returns matching entries."""
+        run_id = self._create_run_with_requests()
+        resp = self.client.post(f"/api/runs/{run_id}/requests/query", json={
+            "endpoint_type": "llm",
+        })
+        data = resp.json()
+        self.assertEqual(data["matched"], 2)
+
+    def test_query_requests_by_test_pattern(self):
+        """Filter by test_pattern returns matching entries."""
+        run_id = self._create_run_with_requests()
+        resp = self.client.post(f"/api/runs/{run_id}/requests/query", json={
+            "test_pattern": "TestEmb",
+        })
+        data = resp.json()
+        self.assertEqual(data["matched"], 1)
+
+    def test_query_requests_by_status(self):
+        """Filter by status_code returns matching entries."""
+        run_id = self._create_run_with_requests()
+        resp = self.client.post(f"/api/runs/{run_id}/requests/query", json={
+            "status_code": 429,
+        })
+        data = resp.json()
+        self.assertEqual(data["matched"], 1)
+
+    def test_query_requests_errors_only(self):
+        """Filter errors_only returns only error entries."""
+        run_id = self._create_run_with_requests()
+        resp = self.client.post(f"/api/runs/{run_id}/requests/query", json={
+            "errors_only": True,
+        })
+        data = resp.json()
+        self.assertEqual(data["matched"], 1)
+
+    def test_query_requests_keyword_search(self):
+        """Keyword search finds entries with matching payload content."""
+        run_id = self._create_run_with_requests()
+        resp = self.client.post(f"/api/runs/{run_id}/requests/query", json={
+            "keyword": "restart",
+        })
+        data = resp.json()
+        self.assertEqual(data["matched"], 1)
+
+    def test_query_requests_include_payloads(self):
+        """include_payloads=true returns full bodies."""
+        run_id = self._create_run_with_requests()
+        resp = self.client.post(f"/api/runs/{run_id}/requests/query", json={
+            "endpoint_type": "embedding",
+            "include_payloads": True,
+        })
+        data = resp.json()
+        self.assertEqual(data["matched"], 1)
+        entry = data["entries"][0]
+        self.assertIn("request_body", entry)
+        self.assertIn("response_body", entry)
+
+    def test_query_requests_excludes_payloads_by_default(self):
+        """include_payloads=false (default) strips bodies."""
+        run_id = self._create_run_with_requests()
+        resp = self.client.post(f"/api/runs/{run_id}/requests/query", json={
+            "endpoint_type": "embedding",
+        })
+        data = resp.json()
+        entry = data["entries"][0]
+        self.assertNotIn("request_body", entry)
+        self.assertNotIn("response_body", entry)
+
+    def test_query_requests_summary_by_test(self):
+        """Query response includes summary_by_test."""
+        run_id = self._create_run_with_requests()
+        resp = self.client.post(f"/api/runs/{run_id}/requests/query", json={})
+        data = resp.json()
+        self.assertIn("summary_by_test", data)
+        self.assertGreater(len(data["summary_by_test"]), 0)
+
+    def test_query_requests_run_not_found(self):
+        """Query on nonexistent run returns 404."""
+        resp = self.client.post("/api/runs/nonexistent/requests/query", json={})
+        self.assertEqual(resp.status_code, 404)
+
 
 if __name__ == "__main__":
     unittest.main()

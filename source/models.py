@@ -117,6 +117,7 @@ class RequestLog(BaseModel):
     response_status: Optional[int] = None
     response_body: Optional[Dict[str, Any]] = None
     duration_ms: Optional[float] = None
+    error: Optional[str] = None
     test_context: Optional[str] = None
 
 
@@ -201,6 +202,55 @@ class GenerateReportsResponse(BaseModel):
         description="Map of filename → path for each generated file",
     )
     message: str
+
+
+class RequestQueryParams(BaseModel):
+    """Query parameters for request log filtering.
+
+    All fields are optional — omit to skip that filter.
+    Filters are applied in combination (AND logic).
+    """
+    test_pattern: Optional[str] = Field(
+        default=None,
+        description="Regex or substring to match against test_context (case-insensitive)",
+    )
+    endpoint_type: Optional[str] = Field(
+        default=None,
+        description="Filter by endpoint type: llm, embedding, reranker",
+    )
+    status_code: Optional[int] = Field(
+        default=None,
+        description="Filter by HTTP response status code",
+    )
+    errors_only: bool = Field(
+        default=False,
+        description="If true, return only entries that have errors",
+    )
+    keyword: Optional[str] = Field(
+        default=None,
+        description="Search for keyword in request/response payloads (case-insensitive)",
+    )
+    search_requests: bool = Field(
+        default=True,
+        description="Whether to search request payloads for keyword",
+    )
+    search_responses: bool = Field(
+        default=True,
+        description="Whether to search response payloads for keyword",
+    )
+    include_payloads: bool = Field(
+        default=False,
+        description="If true, include full request_body and response_body in results",
+    )
+
+
+class RequestQueryResponse(BaseModel):
+    """Response for request log queries."""
+    run_id: str
+    total: int
+    matched: int
+    entries: List[Dict[str, Any]]
+    summary_by_test: Optional[List[Dict[str, Any]]] = None
 
 
 class ErrorResponse(BaseModel):

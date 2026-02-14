@@ -17,8 +17,9 @@ Endpoints:
   POST   /api/runs/{run_id}/events      — push pipeline event
   GET    /api/runs/{run_id}/events      — get events for a run
 
-  POST   /api/runs/{run_id}/requests    — push request log entry
-  GET    /api/runs/{run_id}/requests    — get request logs for a run
+  POST   /api/runs/{run_id}/requests       — push request log entry
+  GET    /api/runs/{run_id}/requests       — get request logs for a run
+  POST   /api/runs/{run_id}/requests/query — query/filter request logs
 
   POST   /api/runs/{run_id}/timing      — push timing data
   GET    /api/runs/{run_id}/timing      — get timing data for a run
@@ -62,6 +63,8 @@ from source.models import (
     PipelineEvent,
     RequestLog,
     RequestLogResponse,
+    RequestQueryParams,
+    RequestQueryResponse,
     RunDetail,
     RunSummary,
     ServiceInfo,
@@ -279,6 +282,107 @@ async def get_requests(run_id: str):
         return storage.get_requests(run_id)
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail=f"Run not found: {run_id}")
+
+
+@app.post("/api/runs/{run_id}/requests/query", response_model=RequestQueryResponse)
+async def query_requests(run_id: str, body: RequestQueryParams):
+    """Query and filter request logs for a run.
+
+    Server-side filtering replacement for the former local-file
+    PayloadInspector.  Supports filtering by endpoint type, test
+    pattern, status code, errors, and keyword search across payloads.
+    """
+    import re
+
+    try:
+        all_entries = storage.get_requests(run_id)
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail=f"Run not found: {run_id}")
+
+    total = len(all_entries)
+    matched = all_entries
+
+    # Filter by endpoint type (stored as "service")
+    if body.endpoint_type:
+        matched = [e for e in matched if e.get("service") == body.endpoint_type]
+
+    # Filter by test pattern (regex or substring)
+    if body.test_pattern:
+        try:
+            regex = re.compile(body.test_pattern, re.IGNORECASE)
+            matched = [e for e in matched if regex.search(e.get("test_context") or "")]
+        except re.error:
+            pattern_lower = body.test_pattern.lower()
+            matched = [
+                e for e in matched
+                if pattern_lower in (e.get("test_context") or "").lower()
+            ]
+
+    # Filter by status code
+    if body.status_code is not None:
+        matched = [e for e in matched if e.get("response_status") == body.status_code]
+
+    # Filter errors only
+    if body.errors_only:
+        matched = [e for e in matched if e.get("error")]
+
+    # Keyword search in payloads
+    if body.keyword:
+        kw_lower = body.keyword.lower()
+        filtered = []
+        for e in matched:
+            found = False
+            if body.search_requests and e.get("request_body"):
+                if kw_lower in json.dumps(e["request_body"], default=str).lower():
+                    found = True
+            if not found and body.search_responses and e.get("response_body"):
+                if kw_lower in json.dumps(e["response_body"], default=str).lower():
+                    found = True
+            if found:
+                filtered.append(e)
+        matched = filtered
+
+    # Build summary by test
+    test_stats: Dict[str, Dict[str, int]] = {}
+    for e in matched:
+        ctx = e.get("test_context") or "<unknown>"
+        if ctx not in test_stats:
+            test_stats[ctx] = {
+                "test_context": ctx, "total": 0,
+                "llm": 0, "embedding": 0, "reranker": 0, "errors": 0,
+            }
+        test_stats[ctx]["total"] += 1
+        svc = e.get("service", "")
+        if svc in ("llm", "embedding", "reranker"):
+            test_stats[ctx][svc] += 1
+        if e.get("error"):
+            test_stats[ctx]["errors"] += 1
+
+    # Build result entries (strip payloads unless requested)
+    result_entries = []
+    for e in matched:
+        entry = {
+            "sequence": e.get("sequence"),
+            "timestamp": e.get("timestamp"),
+            "test_context": e.get("test_context"),
+            "endpoint_type": e.get("service"),
+            "url": e.get("url"),
+            "status_code": e.get("response_status"),
+            "duration_ms": e.get("duration_ms"),
+            "error": e.get("error"),
+        }
+        if body.include_payloads:
+            entry["request_body"] = e.get("request_body")
+            entry["response_body"] = e.get("response_body")
+        result_entries.append(entry)
+
+    return RequestQueryResponse(
+        run_id=run_id,
+        total=total,
+        matched=len(matched),
+        entries=result_entries,
+        summary_by_test=list(test_stats.values()),
+    )
 
 
 # ===================================================================

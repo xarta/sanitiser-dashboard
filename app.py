@@ -200,6 +200,19 @@ async def get_run(run_id: str):
         raise HTTPException(status_code=404, detail=f"Run not found: {run_id}")
 
 
+@app.delete("/api/runs/{run_id}", status_code=204)
+async def delete_run(run_id: str):
+    """Delete a pipeline run and all its data."""
+    try:
+        storage.delete_run(run_id)
+        logger.info("Deleted run %s", run_id)
+        return None
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail=f"Run not found: {run_id}")
+    except ValueError as exc:
+        raise HTTPException(status_code=403, detail=str(exc))
+
+
 @app.patch("/api/runs/{run_id}", response_model=RunDetail)
 async def update_run(run_id: str, body: UpdateRunRequest):
     """Update a run's status."""

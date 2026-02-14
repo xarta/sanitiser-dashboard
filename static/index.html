@@ -67,6 +67,23 @@
             return `<span class="status status-${status}">${status}</span>`;
         }
 
+        async function deleteRun(runId) {
+            if (!confirm(`Are you sure you want to delete run "${runId}"?\n\nThis will permanently remove all data, events, and reports for this run.`)) {
+                return;
+            }
+            try {
+                const resp = await fetch(`/api/runs/${runId}`, { method: 'DELETE' });
+                if (resp.ok) {
+                    loadDashboard();
+                } else {
+                    const err = await resp.json().catch(() => ({}));
+                    alert(`Failed to delete run: ${err.detail || resp.statusText}`);
+                }
+            } catch (e) {
+                alert(`Error deleting run: ${e.message}`);
+            }
+        }
+
         async function loadDashboard() {
             try {
                 // Load health for stats
@@ -107,7 +124,7 @@
                     html += `<td>${formatTime(run.created)}</td>`;
                     html += `<td>${run.event_count}</td>`;
                     html += `<td>${run.request_count}</td>`;
-                    html += `<td style="font-size:0.85em;"><a href="/ui/timeline.html?run=${run.run_id}" title="Timeline viewer">📊</a> <a href="/ui/requests.html?run=${run.run_id}" title="Request explorer">🔍</a></td>`;
+                    html += `<td style="font-size:0.85em;"><a href="/ui/timeline.html?run=${run.run_id}" title="Timeline viewer">📊</a> <a href="/ui/requests.html?run=${run.run_id}" title="Request explorer">🔍</a> <a href="#" onclick="deleteRun('${run.run_id}');return false;" title="Delete run" style="color:var(--error);text-decoration:none;">🗑</a></td>`;
                     html += '</tr>';
                 }
 

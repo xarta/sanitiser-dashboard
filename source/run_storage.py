@@ -12,6 +12,7 @@ Data layout:
 import json
 import logging
 import os
+import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -295,6 +296,28 @@ class RunStorage:
             return []
 
         return json.loads(timing_path.read_text())
+
+    # ---------------------------------------------------------------
+    # Deletion
+    # ---------------------------------------------------------------
+
+    def delete_run(self, run_id: str) -> None:
+        """Delete a run and all its data.
+
+        Raises FileNotFoundError if the run does not exist.
+        """
+        run_dir = self._run_dir(run_id)
+        if not run_dir.exists():
+            raise FileNotFoundError(f"Run not found: {run_id}")
+
+        # Safety: ensure the directory is under our runs path
+        try:
+            run_dir.resolve().relative_to(self.runs_path.resolve())
+        except ValueError:
+            raise ValueError(f"Path traversal rejected: {run_id}")
+
+        shutil.rmtree(run_dir)
+        logger.info("Deleted run %s (removed %s)", run_id, run_dir)
 
     # ---------------------------------------------------------------
     # Stats

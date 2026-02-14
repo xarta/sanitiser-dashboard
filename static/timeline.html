@@ -1,0 +1,1206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Test Coverage Timeline — Doc-Sanitiser Dashboard</title>
+<style>
+:root {
+  --bg: #1a1a2e;
+  --surface: #16213e;
+  --surface2: #0f3460;
+  --text: #e0e0e0;
+  --text-dim: #8888aa;
+  --accent: #e94560;
+  --setup: #f0a500;
+  --test: #00b4d8;
+  --teardown: #9b59b6;
+  --overhead: #555577;
+  --grid: #2a2a4e;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  overflow: hidden;
+  height: 100vh;
+}
+
+/* Top bar */
+#topbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--grid);
+  height: 48px;
+  z-index: 100;
+}
+#topbar h1 {
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+#topbar .meta {
+  font-size: 12px;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+#topbar .spacer { flex: 1; }
+#topbar button, #topbar label {
+  font-size: 12px;
+  padding: 4px 10px;
+  border: 1px solid var(--grid);
+  border-radius: 4px;
+  background: var(--surface2);
+  color: var(--text);
+  cursor: pointer;
+}
+#topbar button:hover { background: var(--accent); }
+#fileInput { display: none; }
+
+/* Nav links */
+.nav-links {
+  display: flex;
+  gap: 2px;
+  margin-left: 8px;
+}
+.nav-links a {
+  font-size: 11px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  color: var(--text-dim);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.nav-links a:hover { color: var(--text); background: rgba(255,255,255,0.05); }
+.nav-links a.active { color: var(--accent); background: rgba(233,69,96,0.15); }
+.nav-sep { color: var(--grid); font-size: 10px; padding: 0 2px; align-self: center; }
+
+/* Run selector */
+#run-select {
+  font-size: 12px;
+  padding: 4px 8px;
+  border: 1px solid var(--grid);
+  border-radius: 4px;
+  background: var(--surface2);
+  color: var(--text);
+  outline: none;
+  max-width: 280px;
+  cursor: pointer;
+}
+#run-select:focus { border-color: var(--accent); }
+#run-select option { background: var(--surface); color: var(--text); }
+
+/* Legend */
+#legend {
+  display: flex;
+  gap: 16px;
+  padding: 6px 16px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--grid);
+  font-size: 11px;
+  height: 28px;
+  align-items: center;
+}
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.legend-swatch {
+  width: 14px;
+  height: 10px;
+  border-radius: 2px;
+}
+
+/* Info panel (right side) */
+#info-panel {
+  position: fixed;
+  right: 0;
+  top: 76px;
+  bottom: 0;
+  width: 320px;
+  background: var(--surface);
+  border-left: 1px solid var(--grid);
+  padding: 16px;
+  overflow-y: auto;
+  font-size: 12px;
+  z-index: 50;
+  transition: transform 0.2s;
+}
+#info-panel.collapsed { transform: translateX(320px); }
+#info-panel h2 { font-size: 14px; margin-bottom: 12px; color: var(--accent); }
+#info-panel table { width: 100%; border-collapse: collapse; }
+#info-panel td { padding: 3px 6px; border-bottom: 1px solid var(--grid); }
+#info-panel td:first-child { color: var(--text-dim); white-space: nowrap; }
+#info-panel td:last-child { text-align: right; font-variant-numeric: tabular-nums; }
+.pct-bar {
+  height: 6px;
+  border-radius: 3px;
+  margin-top: 2px;
+}
+
+/* Canvas */
+#canvas-container {
+  position: fixed;
+  left: 0;
+  right: 320px;
+  top: 76px;
+  bottom: 0;
+}
+#canvas-container.full-width { right: 0; }
+canvas { display: block; }
+
+/* Tooltip */
+#tooltip {
+  position: fixed;
+  pointer-events: none;
+  background: rgba(0,0,0,0.9);
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  padding: 8px 12px;
+  font-size: 11px;
+  z-index: 200;
+  display: none;
+  max-width: 400px;
+  line-height: 1.5;
+}
+
+/* Zoom controls */
+#zoom-controls {
+  position: fixed;
+  bottom: 16px;
+  left: 16px;
+  display: flex;
+  gap: 4px;
+  z-index: 100;
+}
+#zoom-controls button {
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--grid);
+  border-radius: 4px;
+  background: var(--surface2);
+  color: var(--text);
+  font-size: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+#zoom-controls button:hover { background: var(--accent); }
+
+/* Breadcrumb */
+#breadcrumb {
+  position: fixed;
+  bottom: 16px;
+  left: 160px;
+  font-size: 11px;
+  color: var(--text-dim);
+  z-index: 100;
+}
+
+/* Empty-state overlay */
+#empty-state {
+  position: fixed;
+  left: 0;
+  right: 320px;
+  top: 76px;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+  pointer-events: none;
+  text-align: center;
+  padding: 40px;
+}
+#empty-state.hidden { display: none; }
+#empty-state .empty-icon { font-size: 48px; margin-bottom: 16px; }
+#empty-state .empty-title {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+#empty-state .empty-hint {
+  font-size: 13px;
+  color: var(--text-dim);
+  max-width: 420px;
+  line-height: 1.6;
+}
+#empty-state .empty-hint kbd {
+  background: var(--surface2);
+  border: 1px solid var(--grid);
+  border-radius: 3px;
+  padding: 1px 6px;
+  font-size: 12px;
+}
+
+/* Eject button */
+#btn-eject {
+  display: none;
+}
+#btn-eject.visible {
+  display: inline-block;
+}
+</style>
+</head>
+<body>
+
+<div id="topbar">
+  <h1>🧪 Timeline</h1>
+  <div class="nav-links">
+    <a href="/ui/">Dashboard</a>
+    <span class="nav-sep">|</span>
+    <a href="/ui/files.html">Files</a>
+    <span class="nav-sep">|</span>
+    <a href="/ui/timeline.html" class="active">Timeline</a>
+    <span class="nav-sep">|</span>
+    <a href="/ui/requests.html" id="nav-requests">Requests</a>
+  </div>
+  <span id="run-date" class="meta"></span>
+  <span id="run-stats" class="meta"></span>
+  <div class="spacer"></div>
+  <select id="run-select" title="Load timing data from a pipeline run">
+    <option value="">— Select run —</option>
+  </select>
+  <span id="loaded-file" class="meta" style="display:none"></span>
+  <label for="fileInput">📂 Local</label>
+  <input type="file" id="fileInput" accept=".json">
+  <button id="btn-eject" title="Eject loaded JSON and clear stored data">⏏ Eject</button>
+  <button id="btn-toggle-panel">☰ Panel</button>
+  <button id="btn-toggle-calls" title="Toggle LLM/Embedding call lanes">📡 Calls</button>
+</div>
+
+<div id="legend">
+  <div class="legend-item"><div class="legend-swatch" style="background:var(--setup)"></div> setUpClass</div>
+  <div class="legend-item"><div class="legend-swatch" style="background:var(--test)"></div> Test execution</div>
+  <div class="legend-item"><div class="legend-swatch" style="background:var(--teardown)"></div> tearDownClass</div>
+  <div class="legend-item"><div class="legend-swatch" style="background:var(--overhead)"></div> Framework overhead</div>
+  <div class="legend-item"><div class="legend-swatch" style="background:#ff6b6b"></div> LLM call</div>
+  <div class="legend-item"><div class="legend-swatch" style="background:#51cf66"></div> Embedding call</div>
+  <div class="legend-item"><div class="legend-swatch" style="background:#ffd43b"></div> Reranker call</div>
+</div>
+
+<div id="canvas-container">
+  <canvas id="timeline"></canvas>
+</div>
+
+<div id="empty-state">
+  <div class="empty-icon">📊</div>
+  <div class="empty-title">No timing data loaded</div>
+  <div class="empty-hint">
+    Select a pipeline run from the dropdown above, or click
+    <kbd>📂 Local</kbd> to load a <code>test-coverage-timing.json</code> file
+    from your machine.
+  </div>
+</div>
+
+<div id="info-panel">
+  <h2>Summary</h2>
+  <div id="summary-content"></div>
+</div>
+
+<div id="tooltip"></div>
+
+<div id="zoom-controls">
+  <button id="btn-zoom-in" title="Zoom in">+</button>
+  <button id="btn-zoom-out" title="Zoom out">−</button>
+  <button id="btn-zoom-fit" title="Fit to view">⊡</button>
+</div>
+
+<div id="breadcrumb"></div>
+
+<script>
+// ── Constants ──────────────────────────────────────────────────────
+const API_BASE = window.location.origin;
+let CURRENT_RUN_ID = null;
+
+// ── State ──────────────────────────────────────────────────────────
+let DATA = null;
+let spans = [];
+let viewStart = 0;
+let viewEnd = 10;
+let rowHeight = 24;
+let scrollY = 0;
+let hoveredSpan = null;
+let hoveredCall = null;
+let aggregatedGroups = [];
+let showCalls = true;
+let visibleCallSpans = [];
+
+const CALL_LANE_HEIGHT = 10;
+const BASE_ROW_HEIGHT = 24;
+
+const COLORS = {
+  class_setup: '#f0a500',
+  test: '#00b4d8',
+  class_teardown: '#9b59b6',
+  overhead: '#555577',
+  call_llm: '#ff6b6b',
+  call_embedding: '#51cf66',
+  call_reranker: '#ffd43b',
+};
+
+const KIND_LABELS = {
+  class_setup: 'setUpClass',
+  test: 'test',
+  class_teardown: 'tearDownClass',
+  overhead: 'overhead',
+  call_llm: 'LLM call',
+  call_embedding: 'Embedding call',
+  call_reranker: 'Reranker call',
+};
+
+// ── Canvas setup ───────────────────────────────────────────────────
+const container = document.getElementById('canvas-container');
+const canvas = document.getElementById('timeline');
+const ctx = canvas.getContext('2d');
+const tooltip = document.getElementById('tooltip');
+
+function resizeCanvas() {
+  canvas.width = container.clientWidth * devicePixelRatio;
+  canvas.height = container.clientHeight * devicePixelRatio;
+  canvas.style.width = container.clientWidth + 'px';
+  canvas.style.height = container.clientHeight + 'px';
+  ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+  draw();
+}
+window.addEventListener('resize', resizeCanvas);
+
+// ── Nav link helpers ───────────────────────────────────────────────
+function updateNavLinks(runId) {
+  CURRENT_RUN_ID = runId;
+  const reqLink = document.getElementById('nav-requests');
+  if (runId) {
+    reqLink.href = `/ui/requests.html?run=${runId}`;
+  } else {
+    reqLink.href = '/ui/requests.html';
+  }
+}
+
+// ── Run selector ───────────────────────────────────────────────────
+async function populateRunSelector() {
+  const sel = document.getElementById('run-select');
+  try {
+    const resp = await fetch(`${API_BASE}/api/runs`);
+    if (!resp.ok) return;
+    const runs = await resp.json();
+    // Clear existing options (keep the placeholder)
+    sel.innerHTML = '<option value="">— Select run —</option>';
+    for (const run of runs) {
+      const opt = document.createElement('option');
+      opt.value = run.run_id;
+      const date = run.created ? new Date(run.created).toLocaleDateString('en-GB', {
+        day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit'
+      }) : '';
+      opt.textContent = `${run.run_id} (${date}) — ${run.target || 'unknown'}`;
+      sel.appendChild(opt);
+    }
+  } catch (e) {
+    console.warn('Could not fetch runs:', e.message);
+  }
+}
+
+async function loadFromServer(runId) {
+  const filePath = `runs/${runId}/reports/test-coverage-timing.json`;
+  try {
+    const resp = await fetch(`${API_BASE}/api/files/${filePath}`);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const data = await resp.json();
+    if (!data.content) throw new Error('No content in response');
+    const json = JSON.parse(data.content);
+    loadData(json, { filename: `${runId}/test-coverage-timing.json`, skipPersist: true });
+    updateNavLinks(runId);
+    // Update URL without reload
+    const url = new URL(window.location);
+    url.searchParams.set('run', runId);
+    history.replaceState(null, '', url);
+    return true;
+  } catch (e) {
+    console.warn(`Could not load timing data for run ${runId}:`, e.message);
+    return false;
+  }
+}
+
+document.getElementById('run-select').addEventListener('change', async (e) => {
+  const runId = e.target.value;
+  if (!runId) return;
+  const ok = await loadFromServer(runId);
+  if (!ok) {
+    alert(`No timing data found for run ${runId}.\nThe run may not have generated reports yet.`);
+    e.target.value = '';
+  }
+});
+
+// ── Data loading ───────────────────────────────────────────────────
+function loadData(json, opts) {
+  opts = opts || {};
+  DATA = json;
+  spans = json.spans || [];
+
+  viewStart = 0;
+  viewEnd = json.meta.total_elapsed || 10;
+  scrollY = 0;
+
+  if (!opts.skipPersist) {
+    try {
+      localStorage.setItem('tct_json', JSON.stringify(json));
+      localStorage.setItem('tct_filename', opts.filename || 'test-coverage-timing.json');
+    } catch (e) {
+      console.warn('Could not persist JSON to localStorage:', e.message);
+    }
+  }
+
+  const fname = opts.filename || localStorage.getItem('tct_filename') || 'test-coverage-timing.json';
+  const loadedEl = document.getElementById('loaded-file');
+  loadedEl.textContent = '📄 ' + fname;
+  loadedEl.style.display = 'inline';
+  document.getElementById('btn-eject').classList.add('visible');
+
+  document.getElementById('empty-state').classList.add('hidden');
+
+  document.getElementById('run-date').textContent = json.meta.run_date || '';
+  const m = json.meta;
+  document.getElementById('run-stats').textContent =
+    `${m.total_tests} tests | ${m.passed}✅ ${m.failed}❌ ${m.errors}💥 ${m.skipped}⏭ | ${formatDuration(m.total_elapsed)}`;
+
+  const callBtn = document.getElementById('btn-toggle-calls');
+  const hasCallSpans = (json.call_spans || []).length > 0;
+  callBtn.style.opacity = hasCallSpans ? '1' : '0.4';
+  callBtn.title = hasCallSpans
+    ? `Toggle LLM/Embedding call lanes (${json.call_spans.length} calls, ${json.call_lanes || 1} threads)`
+    : 'No call span data in this JSON';
+
+  buildSummaryPanel();
+  buildVisibleRows();
+  resizeCanvas();
+}
+
+async function loadDefault() {
+  // 1. Check URL params for ?run=RUN_ID
+  const params = new URLSearchParams(window.location.search);
+  const runId = params.get('run');
+  if (runId) {
+    const ok = await loadFromServer(runId);
+    if (ok) {
+      // Select it in the dropdown
+      const sel = document.getElementById('run-select');
+      sel.value = runId;
+      return;
+    }
+  }
+
+  // 2. Check localStorage
+  try {
+    const stored = localStorage.getItem('tct_json');
+    if (stored) {
+      const json = JSON.parse(stored);
+      const fname = localStorage.getItem('tct_filename') || 'test-coverage-timing.json';
+      loadData(json, { skipPersist: true, filename: fname });
+      return;
+    }
+  } catch (e) {
+    console.warn('Could not restore from localStorage:', e.message);
+  }
+
+  // 3. Show empty-state
+  showEmptyState();
+}
+
+function showEmptyState() {
+  DATA = null;
+  spans = [];
+  aggregatedGroups = [];
+  document.getElementById('empty-state').classList.remove('hidden');
+  document.getElementById('btn-eject').classList.remove('visible');
+  document.getElementById('loaded-file').style.display = 'none';
+  document.getElementById('run-date').textContent = '';
+  document.getElementById('run-stats').textContent = '';
+  document.getElementById('summary-content').innerHTML = '';
+  resizeCanvas();
+}
+
+document.getElementById('fileInput').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const filename = file.name;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const json = JSON.parse(reader.result);
+      loadData(json, { filename: filename });
+      updateNavLinks(null);
+    } catch (err) {
+      alert('Invalid JSON: ' + err.message);
+    }
+  };
+  reader.readAsText(file);
+  e.target.value = '';
+});
+
+// ── Row building with aggregation ──────────────────────────────────
+const AGGREGATE_THRESHOLD_PX = 3;
+
+function buildVisibleRows() {
+  if (!spans.length) { aggregatedGroups = []; return; }
+
+  const pxPerSec = container.clientWidth / (viewEnd - viewStart);
+  const margin = (viewEnd - viewStart) * 0.05;
+  const vStart = viewStart - margin;
+  const vEnd = viewEnd + margin;
+
+  let visible = spans.filter(s => s.end > vStart && s.start < vEnd);
+
+  aggregatedGroups = [];
+  let i = 0;
+  while (i < visible.length) {
+    const s = visible[i];
+    const pxWidth = s.duration * pxPerSec;
+
+    if (pxWidth >= AGGREGATE_THRESHOLD_PX) {
+      aggregatedGroups.push({
+        type: 'single',
+        span: s,
+        start: s.start,
+        end: s.end,
+        duration: s.duration,
+      });
+      i++;
+    } else {
+      const group = [s];
+      let groupEnd = s.end;
+      let j = i + 1;
+      while (j < visible.length) {
+        const ns = visible[j];
+        const nsPx = ns.duration * pxPerSec;
+        if (nsPx < AGGREGATE_THRESHOLD_PX) {
+          group.push(ns);
+          groupEnd = Math.max(groupEnd, ns.end);
+          j++;
+        } else {
+          break;
+        }
+      }
+      aggregatedGroups.push({
+        type: 'aggregate',
+        spans: group,
+        start: group[0].start,
+        end: groupEnd,
+        duration: groupEnd - group[0].start,
+        count: group.length,
+      });
+      i = j;
+    }
+  }
+
+  const allCalls = (DATA && DATA.call_spans) || [];
+  const totalLanes = (DATA && DATA.call_lanes) || 1;
+  for (const row of aggregatedGroups) {
+    if (showCalls && allCalls.length > 0 && row.type === 'single') {
+      const s = row.span;
+      row.calls = allCalls.filter(c => c.end > s.start && c.start < s.end);
+      if (row.calls.length > 0) {
+        const lanesUsed = new Set(row.calls.map(c => c.lane));
+        row.callLanes = lanesUsed.size;
+        row.height = BASE_ROW_HEIGHT + row.callLanes * CALL_LANE_HEIGHT;
+      } else {
+        row.callLanes = 0;
+        row.height = BASE_ROW_HEIGHT;
+      }
+    } else {
+      row.calls = [];
+      row.callLanes = 0;
+      row.height = BASE_ROW_HEIGHT;
+    }
+  }
+}
+
+function getRowY(i) {
+  let y = HEADER_HEIGHT;
+  for (let j = 0; j < i; j++) {
+    y += aggregatedGroups[j].height;
+  }
+  return y - scrollY;
+}
+
+function getTotalRowsHeight() {
+  let h = 0;
+  for (const row of aggregatedGroups) h += row.height;
+  return h;
+}
+
+// ── Drawing ────────────────────────────────────────────────────────
+const LABEL_COL_WIDTH = 0;
+const HEADER_HEIGHT = 24;
+const LEFT_MARGIN = 10;
+
+function timeToX(t) {
+  const w = container.clientWidth - LEFT_MARGIN;
+  return LEFT_MARGIN + (t - viewStart) / (viewEnd - viewStart) * w;
+}
+
+function xToTime(x) {
+  const w = container.clientWidth - LEFT_MARGIN;
+  return viewStart + (x - LEFT_MARGIN) / w * (viewEnd - viewStart);
+}
+
+function formatDuration(secs) {
+  if (secs < 0.001) return '<1ms';
+  if (secs < 1) return (secs * 1000).toFixed(0) + 'ms';
+  if (secs < 60) return secs.toFixed(1) + 's';
+  const m = Math.floor(secs / 60);
+  const s = secs % 60;
+  return m + 'm ' + s.toFixed(1) + 's';
+}
+
+function formatTimeAxis(secs) {
+  if (viewEnd - viewStart < 2) {
+    return (secs * 1000).toFixed(0) + 'ms';
+  }
+  const m = Math.floor(secs / 60);
+  const s = secs % 60;
+  if (m > 0) return m + ':' + s.toFixed(1).padStart(4, '0');
+  return s.toFixed(1) + 's';
+}
+
+function draw() {
+  if (!DATA) return;
+  const W = container.clientWidth;
+  const H = container.clientHeight;
+
+  ctx.clearRect(0, 0, W, H);
+
+  // ── Time axis header ──
+  ctx.fillStyle = '#0d1117';
+  ctx.fillRect(0, 0, W, HEADER_HEIGHT);
+
+  const timeRange = viewEnd - viewStart;
+  let tickInterval = 1;
+  const intervals = [0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1, 5, 10, 30, 60, 120, 300, 600];
+  for (const iv of intervals) {
+    if (timeRange / iv <= 15) { tickInterval = iv; break; }
+  }
+
+  ctx.strokeStyle = 'var(--grid)';
+  ctx.fillStyle = '#8888aa';
+  ctx.font = '10px monospace';
+  ctx.textAlign = 'center';
+
+  const firstTick = Math.ceil(viewStart / tickInterval) * tickInterval;
+  for (let t = firstTick; t <= viewEnd; t += tickInterval) {
+    const x = timeToX(t);
+    if (x < LEFT_MARGIN || x > W) continue;
+
+    ctx.beginPath();
+    ctx.setLineDash([2, 4]);
+    ctx.moveTo(x, HEADER_HEIGHT);
+    ctx.lineTo(x, H);
+    ctx.strokeStyle = '#2a2a4e';
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.fillStyle = '#8888aa';
+    ctx.fillText(formatTimeAxis(t), x, 16);
+  }
+
+  // ── Rows ──
+  const totalRows = aggregatedGroups.length;
+  const contentH = H - HEADER_HEIGHT;
+
+  for (let i = 0; i < totalRows; i++) {
+    const y = getRowY(i);
+    const rh = aggregatedGroups[i].height;
+    if (y + rh < HEADER_HEIGHT || y > H) continue;
+
+    const row = aggregatedGroups[i];
+
+    if (i % 2 === 0) {
+      ctx.fillStyle = 'rgba(255,255,255,0.015)';
+      ctx.fillRect(0, y, W, rh);
+    }
+
+    const mainBarH = BASE_ROW_HEIGHT - 4;
+    const mainBarY = y + 2;
+
+    if (row.type === 'single') {
+      const s = row.span;
+      const x1 = Math.max(timeToX(s.start), LEFT_MARGIN);
+      const x2 = Math.min(timeToX(s.end), W);
+      const barW = Math.max(x2 - x1, 1);
+
+      ctx.fillStyle = COLORS[s.kind] || '#666';
+      ctx.fillRect(x1, mainBarY, barW, mainBarH);
+
+      if (hoveredSpan === i) {
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(x1, mainBarY, barW, mainBarH);
+        ctx.lineWidth = 1;
+      }
+
+      if (barW > 50) {
+        const isLightBar = (s.kind === 'class_setup' || s.kind === 'test');
+        ctx.fillStyle = isLightBar ? '#1a1a2e' : '#fff';
+        ctx.font = isLightBar ? 'bold 10px sans-serif' : '10px sans-serif';
+        ctx.textAlign = 'left';
+        const label = s.kind === 'overhead'
+          ? `overhead (${formatDuration(s.duration)})`
+          : `${s.label} (${formatDuration(s.duration)})`;
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(x1 + 2, mainBarY, barW - 4, mainBarH);
+        ctx.clip();
+        ctx.fillText(label, x1 + 4, mainBarY + mainBarH - 4);
+        ctx.restore();
+      }
+
+      // ── Call lanes ──
+      if (row.calls && row.calls.length > 0) {
+        const callAreaY = y + BASE_ROW_HEIGHT;
+        const lanesInRow = [...new Set(row.calls.map(c => c.lane))].sort((a, b) => a - b);
+        const laneMap = {};
+        lanesInRow.forEach((lid, idx) => { laneMap[lid] = idx; });
+
+        ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+        ctx.beginPath();
+        ctx.moveTo(LEFT_MARGIN, callAreaY);
+        ctx.lineTo(W, callAreaY);
+        ctx.stroke();
+
+        for (const c of row.calls) {
+          const cx1 = Math.max(timeToX(c.start), LEFT_MARGIN);
+          const cx2 = Math.min(timeToX(c.end), W);
+          const cw = Math.max(cx2 - cx1, 1);
+          const laneIdx = laneMap[c.lane] || 0;
+          const cy = callAreaY + laneIdx * CALL_LANE_HEIGHT + 1;
+          const ch = CALL_LANE_HEIGHT - 2;
+
+          ctx.fillStyle = COLORS[c.kind] || '#888';
+          ctx.fillRect(cx1, cy, cw, ch);
+
+          if (hoveredCall !== null && hoveredCall._ref === c) {
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(cx1, cy, cw, ch);
+          }
+
+          if (cw > 40) {
+            const isLight = (c.kind === 'call_reranker' || c.kind === 'call_embedding');
+            ctx.fillStyle = isLight ? '#1a1a2e' : '#fff';
+            ctx.font = '8px sans-serif';
+            ctx.textAlign = 'left';
+            ctx.save();
+            ctx.beginPath();
+            ctx.rect(cx1, cy, cw, ch);
+            ctx.clip();
+            ctx.fillText(`${c.endpoint_type} ${formatDuration(c.duration)}`, cx1 + 2, cy + ch - 1);
+            ctx.restore();
+          }
+        }
+      }
+    } else {
+      // Aggregate row
+      const x1 = Math.max(timeToX(row.start), LEFT_MARGIN);
+      const x2 = Math.min(timeToX(row.end), W);
+      const barW = Math.max(x2 - x1, 4);
+
+      const subPxPerSec = barW / row.duration;
+      for (const sub of row.spans) {
+        const sx = x1 + (sub.start - row.start) * subPxPerSec;
+        const sw = Math.max(sub.duration * subPxPerSec, 0.5);
+        ctx.fillStyle = COLORS[sub.kind] || '#666';
+        ctx.fillRect(sx, mainBarY, sw, mainBarH);
+      }
+
+      ctx.strokeStyle = '#444';
+      ctx.strokeRect(x1, mainBarY, barW, mainBarH);
+
+      if (hoveredSpan === i) {
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(x1, mainBarY, barW, mainBarH);
+        ctx.lineWidth = 1;
+      }
+
+      if (barW > 40) {
+        ctx.fillStyle = '#ccc';
+        ctx.font = '9px sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText(`${row.count} spans (${formatDuration(row.duration)})`, x1 + 4, mainBarY + mainBarH - 4);
+      }
+    }
+  }
+
+  // ── Scrollbar ──
+  const totalH = getTotalRowsHeight();
+  if (totalH > contentH) {
+    const sbH = contentH * contentH / totalH;
+    const sbY = HEADER_HEIGHT + (scrollY / totalH) * contentH;
+    ctx.fillStyle = 'rgba(255,255,255,0.1)';
+    ctx.fillRect(W - 6, sbY, 4, sbH);
+  }
+}
+
+// ── Interaction ────────────────────────────────────────────────────
+canvas.addEventListener('mousemove', (e) => {
+  const rect = canvas.getBoundingClientRect();
+  const mx = e.clientX - rect.left;
+  const my = e.clientY - rect.top;
+
+  hoveredSpan = null;
+  hoveredCall = null;
+  let yAcc = HEADER_HEIGHT - scrollY;
+  for (let i = 0; i < aggregatedGroups.length; i++) {
+    const rh = aggregatedGroups[i].height;
+    if (my >= yAcc && my < yAcc + rh) {
+      const row = aggregatedGroups[i];
+      const x1 = timeToX(row.start);
+      const x2 = timeToX(row.end);
+      if (mx >= x1 - 2 && mx <= x2 + 2) {
+        hoveredSpan = i;
+
+        if (row.calls && row.calls.length > 0) {
+          const callAreaY = yAcc + BASE_ROW_HEIGHT;
+          if (my >= callAreaY) {
+            const lanesInRow = [...new Set(row.calls.map(c => c.lane))].sort((a, b) => a - b);
+            const laneMap = {};
+            lanesInRow.forEach((lid, idx) => { laneMap[lid] = idx; });
+            for (const c of row.calls) {
+              const cx1 = timeToX(c.start);
+              const cx2 = timeToX(c.end);
+              const laneIdx = laneMap[c.lane] || 0;
+              const cy = callAreaY + laneIdx * CALL_LANE_HEIGHT + 1;
+              const ch = CALL_LANE_HEIGHT - 2;
+              if (mx >= cx1 - 1 && mx <= cx2 + 1 && my >= cy && my < cy + ch) {
+                hoveredCall = { _ref: c, ...c };
+                break;
+              }
+            }
+          }
+        }
+      }
+      break;
+    }
+    yAcc += rh;
+  }
+
+  // Tooltip
+  if (hoveredCall !== null) {
+    const c = hoveredCall;
+    let html = `<b>${c.endpoint_type.toUpperCase()} call</b><br>`;
+    html += `Start: ${formatDuration(c.start)}<br>`;
+    html += `Duration: <b>${formatDuration(c.duration)}</b><br>`;
+    html += `Thread: ${c.thread_id || '?'} (lane ${c.lane})<br>`;
+    html += `Status: ${c.status || '?'}<br>`;
+    html += `Context: ${c.test_context || '—'}`;
+    if (c.label && c.label.length > 15) {
+      html += `<br><i>${c.label.substring(0, 80)}</i>`;
+    }
+    if (c.error) html += `<br><span style="color:#e94560">Error: ${c.error}</span>`;
+    tooltip.innerHTML = html;
+    tooltip.style.display = 'block';
+    tooltip.style.left = (e.clientX + 12) + 'px';
+    tooltip.style.top = (e.clientY - 10) + 'px';
+  } else if (hoveredSpan !== null) {
+    const row = aggregatedGroups[hoveredSpan];
+    let html;
+    if (row.type === 'single') {
+      const s = row.span;
+      html = `<b>${s.label}</b><br>` +
+        `Kind: ${KIND_LABELS[s.kind] || s.kind}<br>` +
+        `Start: ${formatDuration(s.start)}<br>` +
+        `Duration: <b>${formatDuration(s.duration)}</b><br>` +
+        `File: ${s.file || '—'}`;
+      if (row.calls && row.calls.length > 0) {
+        html += `<br><span style="color:#51cf66">${row.calls.length} HTTP calls across ${row.callLanes} thread(s)</span>`;
+      }
+    } else {
+      const kinds = {};
+      row.spans.forEach(s => { kinds[s.kind] = (kinds[s.kind] || 0) + 1; });
+      html = `<b>${row.count} aggregated spans</b><br>` +
+        `Duration: ${formatDuration(row.duration)}<br>` +
+        Object.entries(kinds).map(([k,v]) => `${KIND_LABELS[k] || k}: ${v}`).join('<br>') +
+        `<br><i>Zoom in to expand</i>`;
+    }
+    tooltip.innerHTML = html;
+    tooltip.style.display = 'block';
+    tooltip.style.left = (e.clientX + 12) + 'px';
+    tooltip.style.top = (e.clientY - 10) + 'px';
+  } else {
+    tooltip.style.display = 'none';
+  }
+
+  draw();
+});
+
+canvas.addEventListener('mouseleave', () => {
+  hoveredSpan = null;
+  hoveredCall = null;
+  tooltip.style.display = 'none';
+  draw();
+});
+
+canvas.addEventListener('dblclick', (e) => {
+  if (hoveredSpan === null) return;
+  const row = aggregatedGroups[hoveredSpan];
+  const pad = row.duration * 0.1 || 0.01;
+  viewStart = Math.max(0, row.start - pad);
+  viewEnd = row.end + pad;
+  buildVisibleRows();
+  draw();
+  updateBreadcrumb();
+});
+
+canvas.addEventListener('wheel', (e) => {
+  e.preventDefault();
+
+  if (e.ctrlKey || e.metaKey) {
+    const rect = canvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const pivotTime = xToTime(mx);
+
+    const factor = e.deltaY > 0 ? 1.2 : 1 / 1.2;
+    const newRange = (viewEnd - viewStart) * factor;
+    const totalRange = DATA ? DATA.meta.total_elapsed : 10;
+
+    if (newRange > totalRange * 1.1) {
+      viewStart = 0;
+      viewEnd = totalRange;
+    } else if (newRange < 0.0001) {
+      return;
+    } else {
+      const ratio = (pivotTime - viewStart) / (viewEnd - viewStart);
+      viewStart = pivotTime - newRange * ratio;
+      viewEnd = pivotTime + newRange * (1 - ratio);
+      if (viewStart < 0) { viewEnd -= viewStart; viewStart = 0; }
+    }
+
+    buildVisibleRows();
+    draw();
+    updateBreadcrumb();
+    return;
+  }
+
+  const totalH = getTotalRowsHeight();
+  const contentH = container.clientHeight - HEADER_HEIGHT;
+  if (e.shiftKey) {
+    const timePerPx = (viewEnd - viewStart) / container.clientWidth;
+    const dt = e.deltaY * timePerPx * 0.5;
+    const range = viewEnd - viewStart;
+    const totalRange = DATA ? DATA.meta.total_elapsed : 10;
+    viewStart = Math.max(0, Math.min(totalRange - range, viewStart + dt));
+    viewEnd = viewStart + range;
+    buildVisibleRows();
+    updateBreadcrumb();
+  } else {
+    scrollY = Math.max(0, Math.min(Math.max(0, totalH - contentH), scrollY + e.deltaY));
+  }
+  draw();
+}, { passive: false });
+
+let isPanning = false;
+let panStartX = 0;
+let panStartY = 0;
+let panStartTime = 0;
+let panStartScrollY = 0;
+
+canvas.addEventListener('mousedown', (e) => {
+  if (e.button === 0) {
+    isPanning = true;
+    panStartX = e.clientX;
+    panStartY = e.clientY;
+    panStartTime = viewStart;
+    panStartScrollY = scrollY;
+    canvas.style.cursor = 'grabbing';
+  }
+});
+
+window.addEventListener('mousemove', (e) => {
+  if (!isPanning) return;
+
+  const dx = e.clientX - panStartX;
+  const timePerPx = (viewEnd - viewStart) / container.clientWidth;
+  const dt = -dx * timePerPx;
+  const totalRange = DATA ? DATA.meta.total_elapsed : 10;
+  const range = viewEnd - viewStart;
+
+  viewStart = Math.max(0, panStartTime + dt);
+  viewEnd = viewStart + range;
+  if (viewEnd > totalRange) {
+    viewEnd = totalRange;
+    viewStart = viewEnd - range;
+  }
+
+  const dy = e.clientY - panStartY;
+  const totalH = getTotalRowsHeight();
+  const contentH = container.clientHeight - HEADER_HEIGHT;
+  scrollY = Math.max(0, Math.min(Math.max(0, totalH - contentH), panStartScrollY - dy));
+
+  buildVisibleRows();
+  draw();
+});
+
+window.addEventListener('mouseup', () => {
+  if (isPanning) {
+    isPanning = false;
+    canvas.style.cursor = 'default';
+  }
+});
+
+document.getElementById('btn-zoom-in').addEventListener('click', () => {
+  const mid = (viewStart + viewEnd) / 2;
+  const range = (viewEnd - viewStart) / 2;
+  viewStart = mid - range / 2;
+  viewEnd = mid + range / 2;
+  buildVisibleRows();
+  draw();
+  updateBreadcrumb();
+});
+
+document.getElementById('btn-zoom-out').addEventListener('click', () => {
+  const mid = (viewStart + viewEnd) / 2;
+  const range = (viewEnd - viewStart) * 2;
+  const total = DATA ? DATA.meta.total_elapsed : 10;
+  viewStart = Math.max(0, mid - range / 2);
+  viewEnd = Math.min(total, mid + range / 2);
+  buildVisibleRows();
+  draw();
+  updateBreadcrumb();
+});
+
+document.getElementById('btn-zoom-fit').addEventListener('click', () => {
+  if (!DATA) return;
+  viewStart = 0;
+  viewEnd = DATA.meta.total_elapsed;
+  scrollY = 0;
+  buildVisibleRows();
+  draw();
+  updateBreadcrumb();
+});
+
+document.getElementById('btn-toggle-panel').addEventListener('click', () => {
+  const panel = document.getElementById('info-panel');
+  const cont = document.getElementById('canvas-container');
+  panel.classList.toggle('collapsed');
+  cont.classList.toggle('full-width');
+  resizeCanvas();
+});
+
+document.getElementById('btn-toggle-calls').addEventListener('click', () => {
+  showCalls = !showCalls;
+  const btn = document.getElementById('btn-toggle-calls');
+  btn.style.background = showCalls ? 'var(--accent)' : 'var(--surface2)';
+  buildVisibleRows();
+  draw();
+});
+
+function updateBreadcrumb() {
+  if (!DATA) return;
+  const total = DATA.meta.total_elapsed;
+  const range = viewEnd - viewStart;
+  const pct = (range / total * 100).toFixed(1);
+  document.getElementById('breadcrumb').textContent =
+    `Viewing ${formatDuration(viewStart)} – ${formatDuration(viewEnd)} (${pct}% of ${formatDuration(total)})`;
+}
+
+// ── Summary panel ──────────────────────────────────────────────────
+function buildSummaryPanel() {
+  if (!DATA) return;
+  const el = document.getElementById('summary-content');
+  const summary = DATA.summary || [];
+  const total = DATA.meta.total_elapsed;
+  const overhead = DATA.overhead_total || 0;
+
+  let html = '<table>';
+
+  const sorted = [...summary].sort((a, b) => b.total - a.total);
+
+  for (const s of sorted) {
+    const pct = total > 0 ? (s.total / total * 100) : 0;
+    const color = pct > 20 ? 'var(--accent)' : pct > 5 ? 'var(--setup)' : 'var(--test)';
+    html += `<tr>
+      <td>🧪 ${s.file}</td>
+      <td>${formatDuration(s.total)} (${pct.toFixed(1)}%)</td>
+    </tr>
+    <tr><td colspan="2">
+      <div style="display:flex;gap:2px;height:6px;">
+        <div class="pct-bar" style="background:var(--setup);width:${s.setup/total*100}%"></div>
+        <div class="pct-bar" style="background:var(--test);width:${s.tests/total*100}%"></div>
+        <div class="pct-bar" style="background:var(--teardown);width:${s.teardown/total*100}%"></div>
+      </div>
+      <div style="font-size:10px;color:var(--text-dim)">
+        setUp: ${formatDuration(s.setup)} | tests: ${formatDuration(s.tests)} | tearDown: ${formatDuration(s.teardown)}
+      </div>
+    </td></tr>`;
+  }
+
+  if (overhead > 0.001) {
+    const pct = (overhead / total * 100).toFixed(1);
+    html += `<tr>
+      <td>⏳ Overhead</td>
+      <td>${formatDuration(overhead)} (${pct}%)</td>
+    </tr>`;
+  }
+
+  html += `<tr style="font-weight:bold;border-top:2px solid var(--grid)">
+    <td>TOTAL</td><td>${formatDuration(total)}</td>
+  </tr>`;
+  html += '</table>';
+
+  const callSpans = DATA.call_spans || [];
+  if (callSpans.length > 0) {
+    const lanes = DATA.call_lanes || 1;
+    const byType = {};
+    let totalCallTime = 0;
+    for (const c of callSpans) {
+      const t = c.endpoint_type || 'unknown';
+      if (!byType[t]) byType[t] = { count: 0, total: 0 };
+      byType[t].count++;
+      byType[t].total += c.duration;
+      totalCallTime += c.duration;
+    }
+    html += `<h2 style="margin-top:16px">📡 HTTP Calls</h2>`;
+    html += `<table>`;
+    html += `<tr><td style="color:var(--text-dim)">Total calls</td><td style="text-align:right">${callSpans.length}</td></tr>`;
+    html += `<tr><td style="color:var(--text-dim)">Thread lanes</td><td style="text-align:right">${lanes}</td></tr>`;
+    html += `<tr><td style="color:var(--text-dim)">Sum of call time</td><td style="text-align:right">${formatDuration(totalCallTime)}</td></tr>`;
+    for (const [t, info] of Object.entries(byType).sort((a,b) => b[1].total - a[1].total)) {
+      const color = COLORS['call_' + t] || '#888';
+      html += `<tr>
+        <td><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${color};margin-right:4px"></span>${t}</td>
+        <td style="text-align:right">${info.count}× · ${formatDuration(info.total)}</td>
+      </tr>`;
+    }
+    html += `</table>`;
+  }
+
+  el.innerHTML = html;
+}
+
+// Eject button
+document.getElementById('btn-eject').addEventListener('click', () => {
+  try {
+    localStorage.removeItem('tct_json');
+    localStorage.removeItem('tct_filename');
+  } catch (e) { /* ignore */ }
+  CURRENT_RUN_ID = null;
+  document.getElementById('run-select').value = '';
+  const url = new URL(window.location);
+  url.searchParams.delete('run');
+  history.replaceState(null, '', url);
+  updateNavLinks(null);
+  showEmptyState();
+});
+
+// ── Init ───────────────────────────────────────────────────────────
+populateRunSelector().then(() => loadDefault());
+</script>
+</body>
+</html>

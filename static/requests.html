@@ -1,0 +1,993 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Request/Response Explorer — Doc-Sanitiser Dashboard</title>
+<style>
+:root {
+  --bg: #1a1a2e;
+  --surface: #16213e;
+  --surface2: #0f3460;
+  --surface3: #1a2744;
+  --text: #e0e0e0;
+  --text-dim: #8888aa;
+  --accent: #e94560;
+  --accent2: #00b4d8;
+  --llm: #ff6b6b;
+  --embedding: #51cf66;
+  --reranker: #ffd43b;
+  --success: #51cf66;
+  --error: #ff6b6b;
+  --grid: #2a2a4e;
+  --border: #333366;
+  --scrollbar: #333;
+  --scrollbar-thumb: #555;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: var(--scrollbar); }
+::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 4px; }
+
+/* ---- Top bar ---- */
+#topbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--grid);
+  min-height: 48px;
+  flex-shrink: 0;
+}
+#topbar h1 { font-size: 14px; font-weight: 600; white-space: nowrap; }
+#topbar .meta { font-size: 12px; color: var(--text-dim); white-space: nowrap; }
+#topbar .spacer { flex: 1; }
+#topbar button, #topbar label {
+  font-size: 12px;
+  padding: 4px 10px;
+  border: 1px solid var(--grid);
+  border-radius: 4px;
+  background: var(--surface2);
+  color: var(--text);
+  cursor: pointer;
+  white-space: nowrap;
+}
+#topbar button:hover, #topbar label:hover { background: var(--accent); }
+#fileInput { display: none; }
+.btn-active { background: var(--accent) !important; }
+
+/* Nav links */
+.nav-links {
+  display: flex;
+  gap: 2px;
+  margin-left: 8px;
+}
+.nav-links a {
+  font-size: 11px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  color: var(--text-dim);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.nav-links a:hover { color: var(--text); background: rgba(255,255,255,0.05); }
+.nav-links a.active { color: var(--accent); background: rgba(233,69,96,0.15); }
+.nav-sep { color: var(--grid); font-size: 10px; padding: 0 2px; align-self: center; }
+
+/* Run selector */
+#run-select {
+  font-size: 12px;
+  padding: 4px 8px;
+  border: 1px solid var(--grid);
+  border-radius: 4px;
+  background: var(--surface2);
+  color: var(--text);
+  outline: none;
+  max-width: 280px;
+  cursor: pointer;
+}
+#run-select:focus { border-color: var(--accent); }
+#run-select option { background: var(--surface); color: var(--text); }
+
+/* ---- Filter bar ---- */
+#filterbar {
+  display: flex;
+  gap: 8px;
+  padding: 8px 16px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--grid);
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  align-items: center;
+}
+#filterbar label { font-size: 11px; color: var(--text-dim); }
+#filterbar input, #filterbar select {
+  font-size: 12px;
+  padding: 4px 8px;
+  border: 1px solid var(--grid);
+  border-radius: 4px;
+  background: var(--surface2);
+  color: var(--text);
+  outline: none;
+}
+#filterbar input:focus, #filterbar select:focus { border-color: var(--accent); }
+#filterbar input[type="text"] { width: 220px; }
+#filter-count { font-size: 11px; color: var(--text-dim); margin-left: auto; }
+
+/* ---- Main layout ---- */
+#main {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+}
+
+/* ---- Summary panel (left) ---- */
+#summary-panel {
+  width: 280px;
+  min-width: 220px;
+  background: var(--surface);
+  border-right: 1px solid var(--grid);
+  overflow-y: auto;
+  padding: 12px;
+  flex-shrink: 0;
+}
+#summary-panel h2 { font-size: 13px; color: var(--accent); margin-bottom: 8px; }
+#summary-panel .stat-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 3px 0;
+  font-size: 12px;
+  border-bottom: 1px solid var(--grid);
+}
+#summary-panel .stat-label { color: var(--text-dim); }
+#summary-panel .stat-value { font-variant-numeric: tabular-nums; }
+
+.test-list { margin-top: 12px; }
+.test-list h3 { font-size: 12px; color: var(--accent2); margin-bottom: 6px; }
+.test-item {
+  padding: 4px 6px;
+  font-size: 11px;
+  border-bottom: 1px solid var(--grid);
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  gap: 4px;
+}
+.test-item:hover { background: var(--surface2); }
+.test-item.selected { background: var(--surface2); border-left: 2px solid var(--accent); }
+.test-item .test-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+.test-item .test-count { color: var(--text-dim); white-space: nowrap; }
+
+/* ---- Entry list (centre) ---- */
+#entry-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0;
+  min-width: 300px;
+}
+
+.entry-row {
+  display: grid;
+  grid-template-columns: 40px 28px 80px 60px 1fr;
+  gap: 8px;
+  padding: 6px 12px;
+  font-size: 12px;
+  border-bottom: 1px solid var(--grid);
+  cursor: pointer;
+  align-items: center;
+}
+.entry-row:hover { background: var(--surface3); }
+.entry-row.selected { background: var(--surface2); border-left: 3px solid var(--accent); }
+
+.entry-seq { color: var(--text-dim); font-variant-numeric: tabular-nums; }
+.entry-status { font-size: 14px; }
+.entry-type {
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  text-align: center;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+.entry-type.llm { background: rgba(255,107,107,0.2); color: var(--llm); }
+.entry-type.embedding { background: rgba(81,207,102,0.2); color: var(--embedding); }
+.entry-type.reranker { background: rgba(255,212,59,0.2); color: var(--reranker); }
+.entry-duration { color: var(--text-dim); font-variant-numeric: tabular-nums; text-align: right; }
+.entry-context { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ---- Detail panel (right) ---- */
+#detail-panel {
+  width: 480px;
+  min-width: 350px;
+  background: var(--surface);
+  border-left: 1px solid var(--grid);
+  overflow-y: auto;
+  padding: 16px;
+  flex-shrink: 0;
+  display: none;
+}
+#detail-panel.visible { display: block; }
+#detail-panel h2 { font-size: 13px; color: var(--accent); margin-bottom: 12px; }
+
+.detail-meta { margin-bottom: 16px; }
+.detail-meta table { width: 100%; border-collapse: collapse; }
+.detail-meta td { padding: 3px 6px; font-size: 12px; border-bottom: 1px solid var(--grid); }
+.detail-meta td:first-child { color: var(--text-dim); white-space: nowrap; width: 100px; }
+
+.payload-section { margin-bottom: 16px; }
+.payload-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  cursor: pointer;
+}
+.payload-header h3 { font-size: 12px; color: var(--accent2); }
+.payload-header .toggle { font-size: 10px; color: var(--text-dim); }
+.payload-content {
+  background: var(--bg);
+  border: 1px solid var(--grid);
+  border-radius: 4px;
+  padding: 10px;
+  font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+  font-size: 11px;
+  line-height: 1.5;
+  overflow-x: auto;
+  max-height: 400px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.payload-content.collapsed { display: none; }
+.payload-loading { color: var(--text-dim); font-style: italic; }
+.payload-error { color: var(--error); }
+
+.verdict-section { margin-top: 16px; }
+.verdict-section h3 { font-size: 12px; color: var(--accent); margin-bottom: 6px; }
+.verdict-badge {
+  display: inline-block;
+  padding: 3px 8px;
+  border-radius: 3px;
+  font-size: 11px;
+  font-weight: 600;
+}
+.verdict-badge.positive { background: rgba(81,207,102,0.2); color: var(--success); }
+.verdict-badge.negative { background: rgba(255,107,107,0.2); color: var(--error); }
+.verdict-badge.unknown { background: rgba(136,136,170,0.2); color: var(--text-dim); }
+
+/* ---- Empty state ---- */
+#empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  text-align: center;
+  padding: 40px;
+}
+#empty-state.hidden { display: none; }
+.empty-icon { font-size: 48px; margin-bottom: 16px; }
+.empty-title { font-size: 16px; font-weight: 600; margin-bottom: 8px; }
+.empty-hint { font-size: 13px; color: var(--text-dim); max-width: 420px; line-height: 1.6; }
+.empty-hint kbd {
+  background: var(--surface2);
+  border: 1px solid var(--grid);
+  border-radius: 3px;
+  padding: 1px 6px;
+  font-size: 12px;
+}
+
+/* ---- Toast ---- */
+#toast {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--surface2);
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  padding: 8px 16px;
+  font-size: 12px;
+  z-index: 1000;
+  display: none;
+  animation: fadeIn 0.3s;
+}
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+</style>
+</head>
+<body>
+
+<!-- Top bar -->
+<div id="topbar">
+  <h1>🔍 Requests</h1>
+  <div class="nav-links">
+    <a href="/ui/">Dashboard</a>
+    <span class="nav-sep">|</span>
+    <a href="/ui/files.html">Files</a>
+    <span class="nav-sep">|</span>
+    <a href="/ui/timeline.html" id="nav-timeline">Timeline</a>
+    <span class="nav-sep">|</span>
+    <a href="/ui/requests.html" class="active">Requests</a>
+  </div>
+  <span id="run-date" class="meta"></span>
+  <span id="run-stats" class="meta"></span>
+  <div class="spacer"></div>
+  <select id="run-select" title="Load request data from a pipeline run">
+    <option value="">— Select run —</option>
+  </select>
+  <span id="loaded-file" class="meta" style="display:none"></span>
+  <label for="fileInput">📂 Local</label>
+  <input type="file" id="fileInput" accept=".json">
+  <span id="payload-status" class="meta" style="display:none"></span>
+  <button id="btn-eject" style="display:none" title="Eject loaded data and clear storage">⏏ Eject</button>
+  <button id="btn-toggle-summary" title="Toggle summary panel">📊</button>
+</div>
+
+<!-- Filter bar -->
+<div id="filterbar">
+  <label>Test:</label>
+  <input type="text" id="filter-test" placeholder="Filter by test context…">
+  <label>Type:</label>
+  <select id="filter-endpoint">
+    <option value="">All</option>
+    <option value="llm">LLM</option>
+    <option value="embedding">Embedding</option>
+    <option value="reranker">Reranker</option>
+  </select>
+  <label>Status:</label>
+  <select id="filter-status">
+    <option value="">All</option>
+    <option value="200">200 OK</option>
+    <option value="429">429 Rate Limit</option>
+    <option value="500">500 Error</option>
+    <option value="error">Errors only</option>
+  </select>
+  <label>Duration:</label>
+  <select id="filter-duration">
+    <option value="">All</option>
+    <option value="0-9">&lt;10ms</option>
+    <option value="10-99">10–99ms</option>
+    <option value="100-999">100–999ms</option>
+    <option value="1000-9999">1,000–9,999ms</option>
+    <option value="10000-99999">10,000–99,999ms</option>
+    <option value="100000-">&ge;100,000ms</option>
+  </select>
+  <label>Search payloads:</label>
+  <input type="text" id="filter-search" placeholder="Keyword in req/res…">
+  <span id="filter-count"></span>
+</div>
+
+<!-- Main layout -->
+<div id="main">
+  <!-- Summary panel -->
+  <div id="summary-panel">
+    <h2>Run Summary</h2>
+    <div id="summary-stats"></div>
+    <div class="test-list">
+      <h3>Tests</h3>
+      <div id="test-list"></div>
+    </div>
+  </div>
+
+  <!-- Entry list -->
+  <div id="entry-list"></div>
+
+  <!-- Empty state -->
+  <div id="empty-state">
+    <div class="empty-icon">📡</div>
+    <div class="empty-title">No request/response data loaded</div>
+    <div class="empty-hint">
+      Select a pipeline run from the dropdown above, or click
+      <kbd>📂 Local</kbd> to load a
+      <code>test-coverage-requests-responses.json</code> file
+      from your machine.
+    </div>
+  </div>
+
+  <!-- Detail panel -->
+  <div id="detail-panel">
+    <h2 id="detail-title">Entry Details</h2>
+    <div class="detail-meta">
+      <table id="detail-meta-table"></table>
+    </div>
+    <div id="detail-payloads"></div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="toast"></div>
+
+<script>
+/* ================================================================
+   Request/Response Explorer — sanitiser-dashboard hosted version
+   ================================================================ */
+
+const API_BASE = window.location.origin;
+let CURRENT_RUN_ID = null;
+
+const IDB_NAME = 'docsanitiser-reqres';
+const IDB_STORE = 'index';
+const IDB_KEY = 'current';
+
+// ---- IndexedDB helpers ----
+function idbOpen() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(IDB_NAME, 1);
+    req.onupgradeneeded = () => req.result.createObjectStore(IDB_STORE);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+function idbSave(data) {
+  return idbOpen().then(db => new Promise((resolve, reject) => {
+    const tx = db.transaction(IDB_STORE, 'readwrite');
+    tx.objectStore(IDB_STORE).put(data, IDB_KEY);
+    tx.oncomplete = () => { db.close(); resolve(); };
+    tx.onerror = () => { db.close(); reject(tx.error); };
+  })).catch(() => {});
+}
+function idbLoad() {
+  return idbOpen().then(db => new Promise((resolve, reject) => {
+    const tx = db.transaction(IDB_STORE, 'readonly');
+    const req = tx.objectStore(IDB_STORE).get(IDB_KEY);
+    req.onsuccess = () => { db.close(); resolve(req.result || null); };
+    req.onerror = () => { db.close(); reject(req.error); };
+  })).catch(() => null);
+}
+function idbClear() {
+  return idbOpen().then(db => new Promise((resolve, reject) => {
+    const tx = db.transaction(IDB_STORE, 'readwrite');
+    tx.objectStore(IDB_STORE).clear();
+    tx.oncomplete = () => { db.close(); resolve(); };
+    tx.onerror = () => { db.close(); reject(tx.error); };
+  })).catch(() => {});
+}
+
+let INDEX = null;
+let FILTERED = [];
+let SELECTED_ENTRY = null;
+let SELECTED_TEST = null;
+let PAYLOAD_FILES = {};
+let SEARCH_CACHE = {};
+
+// ---- DOM refs ----
+const $runDate = document.getElementById('run-date');
+const $runStats = document.getElementById('run-stats');
+const $loadedFile = document.getElementById('loaded-file');
+const $fileInput = document.getElementById('fileInput');
+const $btnEject = document.getElementById('btn-eject');
+const $btnToggleSummary = document.getElementById('btn-toggle-summary');
+const $payloadStatus = document.getElementById('payload-status');
+const $filterTest = document.getElementById('filter-test');
+const $filterEndpoint = document.getElementById('filter-endpoint');
+const $filterStatus = document.getElementById('filter-status');
+const $filterDuration = document.getElementById('filter-duration');
+const $filterSearch = document.getElementById('filter-search');
+const $filterCount = document.getElementById('filter-count');
+const $summaryPanel = document.getElementById('summary-panel');
+const $summaryStats = document.getElementById('summary-stats');
+const $testList = document.getElementById('test-list');
+const $entryList = document.getElementById('entry-list');
+const $emptyState = document.getElementById('empty-state');
+const $detailPanel = document.getElementById('detail-panel');
+const $detailTitle = document.getElementById('detail-title');
+const $detailMetaTable = document.getElementById('detail-meta-table');
+const $detailPayloads = document.getElementById('detail-payloads');
+const $toast = document.getElementById('toast');
+
+// ── Nav link helpers ───────────────────────────────────────────────
+function updateNavLinks(runId) {
+  CURRENT_RUN_ID = runId;
+  const timLink = document.getElementById('nav-timeline');
+  if (runId) {
+    timLink.href = `/ui/timeline.html?run=${runId}`;
+  } else {
+    timLink.href = '/ui/timeline.html';
+  }
+}
+
+// ── Run selector ───────────────────────────────────────────────────
+async function populateRunSelector() {
+  const sel = document.getElementById('run-select');
+  try {
+    const resp = await fetch(`${API_BASE}/api/runs`);
+    if (!resp.ok) return;
+    const runs = await resp.json();
+    sel.innerHTML = '<option value="">— Select run —</option>';
+    for (const run of runs) {
+      const opt = document.createElement('option');
+      opt.value = run.run_id;
+      const date = run.created ? new Date(run.created).toLocaleDateString('en-GB', {
+        day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit'
+      }) : '';
+      opt.textContent = `${run.run_id} (${date}) — ${run.target || 'unknown'}`;
+      sel.appendChild(opt);
+    }
+  } catch (e) {
+    console.warn('Could not fetch runs:', e.message);
+  }
+}
+
+async function loadFromServer(runId) {
+  const filePath = `runs/${runId}/reports/test-coverage-requests-responses.json`;
+  try {
+    const resp = await fetch(`${API_BASE}/api/files/${filePath}`);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const data = await resp.json();
+    if (!data.content) throw new Error('No content in response');
+    INDEX = JSON.parse(data.content);
+    SEARCH_CACHE = {};
+    updateNavLinks(runId);
+    onIndexLoaded(`${runId}/requests-responses.json`);
+    showToast(`Loaded ${(INDEX.entries || []).length} entries from run ${runId}`);
+    // Update URL without reload
+    const url = new URL(window.location);
+    url.searchParams.set('run', runId);
+    history.replaceState(null, '', url);
+    return true;
+  } catch (e) {
+    console.warn(`Could not load request data for run ${runId}:`, e.message);
+    return false;
+  }
+}
+
+document.getElementById('run-select').addEventListener('change', async (e) => {
+  const runId = e.target.value;
+  if (!runId) return;
+  const ok = await loadFromServer(runId);
+  if (!ok) {
+    alert(`No request data found for run ${runId}.\nThe run may not have generated reports yet.`);
+    e.target.value = '';
+  }
+});
+
+// ---- Init ----
+function init() {
+  $fileInput.addEventListener('change', onFileLoad);
+  $btnEject.addEventListener('click', onEject);
+  $btnToggleSummary.addEventListener('click', toggleSummary);
+  $filterTest.addEventListener('input', debounce(applyFilters, 200));
+  $filterEndpoint.addEventListener('change', applyFilters);
+  $filterStatus.addEventListener('change', applyFilters);
+  $filterDuration.addEventListener('change', applyFilters);
+  $filterSearch.addEventListener('input', debounce(applyFilters, 400));
+
+  // Populate run selector, then check URL params or restore from storage
+  populateRunSelector().then(async () => {
+    // 1. Check URL params for ?run=RUN_ID
+    const params = new URLSearchParams(window.location.search);
+    const runId = params.get('run');
+    if (runId) {
+      const ok = await loadFromServer(runId);
+      if (ok) {
+        document.getElementById('run-select').value = runId;
+        return;
+      }
+    }
+
+    // 2. Try restoring from IndexedDB
+    const stored = await idbLoad();
+    if (stored) {
+      INDEX = stored;
+      onIndexLoaded('IndexedDB');
+    }
+  });
+}
+
+// ---- File loading ----
+function onFileLoad(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = function(ev) {
+    try {
+      INDEX = JSON.parse(ev.target.result);
+      SEARCH_CACHE = {};
+      idbSave(INDEX);
+      updateNavLinks(null);
+      onIndexLoaded(file.name);
+      showToast(`Loaded ${INDEX.entries.length} entries from ${file.name}`);
+    } catch (err) {
+      showToast(`Error loading file: ${err.message}`);
+    }
+  };
+  reader.readAsText(file);
+}
+
+function onEject() {
+  INDEX = null;
+  FILTERED = [];
+  SELECTED_ENTRY = null;
+  SELECTED_TEST = null;
+  SEARCH_CACHE = {};
+  PAYLOAD_FILES = {};
+  CURRENT_RUN_ID = null;
+  idbClear();
+  $runDate.textContent = '';
+  $runStats.textContent = '';
+  $loadedFile.style.display = 'none';
+  $payloadStatus.style.display = 'none';
+  $btnEject.style.display = 'none';
+  $summaryStats.innerHTML = '';
+  $testList.innerHTML = '';
+  $entryList.innerHTML = '';
+  $detailPanel.classList.remove('visible');
+  $emptyState.classList.remove('hidden');
+  $filterCount.textContent = '';
+  document.getElementById('run-select').value = '';
+  const url = new URL(window.location);
+  url.searchParams.delete('run');
+  history.replaceState(null, '', url);
+  updateNavLinks(null);
+  showToast('Data ejected');
+}
+
+function onIndexLoaded(source) {
+  $emptyState.classList.add('hidden');
+  $btnEject.style.display = 'inline-block';
+
+  const meta = INDEX.meta || {};
+  $runDate.textContent = meta.run_date || '';
+  const byType = meta.by_type || {};
+  const parts = Object.entries(byType).map(([k,v]) => `${k}: ${v}`);
+  const sv = INDEX.schema_version || 1;
+  const payloadHint = sv >= 2 ? '✓ payloads inline' : '⚠ payloads external';
+  $runStats.textContent = `${meta.total_requests || 0} requests (${parts.join(', ')}) — ${payloadHint}`;
+  $payloadStatus.textContent = sv >= 2 ? '' : '⚠ Schema v1 — re-run tests to embed payloads';
+  $payloadStatus.style.display = sv >= 2 ? 'none' : 'inline';
+
+  if (source !== 'IndexedDB') {
+    $loadedFile.textContent = `📄 ${source}`;
+    $loadedFile.style.display = 'inline';
+  }
+
+  renderSummary();
+  applyFilters();
+}
+
+// ---- Summary panel ----
+function renderSummary() {
+  const meta = INDEX.meta || {};
+  const entries = INDEX.entries || [];
+
+  let html = '';
+  html += statRow('Total requests', meta.total_requests || 0);
+  html += statRow('Unique tests', meta.unique_tests || 0);
+  const bt = meta.by_type || {};
+  for (const [k,v] of Object.entries(bt)) {
+    html += statRow(k.charAt(0).toUpperCase() + k.slice(1), v);
+  }
+  const errors = entries.filter(e => e.error).length;
+  if (errors > 0) html += statRow('Errors', errors);
+  $summaryStats.innerHTML = html;
+
+  const summary = INDEX.summary_by_test || [];
+  $testList.innerHTML = '';
+  for (const s of summary) {
+    const div = document.createElement('div');
+    div.className = 'test-item';
+    div.innerHTML = `<span class="test-name" title="${esc(s.test_context)}">${esc(shortContext(s.test_context))}</span>
+      <span class="test-count">${s.total}</span>`;
+    div.addEventListener('click', () => {
+      SELECTED_TEST = (SELECTED_TEST === s.test_context) ? null : s.test_context;
+      $filterTest.value = SELECTED_TEST || '';
+      applyFilters();
+      highlightSelectedTest();
+    });
+    $testList.appendChild(div);
+  }
+}
+
+function highlightSelectedTest() {
+  const items = $testList.querySelectorAll('.test-item');
+  const summary = INDEX.summary_by_test || [];
+  items.forEach((el, i) => {
+    el.classList.toggle('selected', summary[i] && summary[i].test_context === SELECTED_TEST);
+  });
+}
+
+function statRow(label, value) {
+  return `<div class="stat-row"><span class="stat-label">${esc(label)}</span><span class="stat-value">${esc(String(value))}</span></div>`;
+}
+
+function toggleSummary() {
+  const hidden = $summaryPanel.style.display === 'none';
+  $summaryPanel.style.display = hidden ? 'block' : 'none';
+  $btnToggleSummary.classList.toggle('btn-active', hidden);
+}
+
+// ---- Filtering ----
+function applyFilters() {
+  if (!INDEX) return;
+
+  const testFilter = $filterTest.value.trim().toLowerCase();
+  const endpointFilter = $filterEndpoint.value;
+  const statusFilter = $filterStatus.value;
+  const searchFilter = $filterSearch.value.trim().toLowerCase();
+
+  let entries = INDEX.entries || [];
+
+  if (testFilter) {
+    try {
+      const re = new RegExp(testFilter, 'i');
+      entries = entries.filter(e => re.test(e.test_context || ''));
+    } catch {
+      entries = entries.filter(e => (e.test_context || '').toLowerCase().includes(testFilter));
+    }
+  }
+
+  if (endpointFilter) {
+    entries = entries.filter(e => e.endpoint_type === endpointFilter);
+  }
+
+  if (statusFilter === 'error') {
+    entries = entries.filter(e => e.error);
+  } else if (statusFilter) {
+    const code = parseInt(statusFilter);
+    entries = entries.filter(e => e.status_code === code);
+  }
+
+  const durationFilter = $filterDuration.value;
+  if (durationFilter) {
+    const parts = durationFilter.split('-');
+    const lo = parseInt(parts[0]);
+    const hi = parts[1] !== '' ? parseInt(parts[1]) : Infinity;
+    entries = entries.filter(e => {
+      const ms = Math.round(e.duration_ms);
+      return ms >= lo && ms <= hi;
+    });
+  }
+
+  if (searchFilter) {
+    entries = entries.filter(e => searchInPayload(e, searchFilter));
+  }
+
+  FILTERED = entries;
+  $filterCount.textContent = `${entries.length} / ${(INDEX.entries || []).length} entries`;
+  renderEntryList();
+}
+
+function searchInPayload(entry, keyword) {
+  const key = entry.seq;
+  if (SEARCH_CACHE[key] === undefined) {
+    SEARCH_CACHE[key] = JSON.stringify(entry).toLowerCase();
+  }
+  return SEARCH_CACHE[key].includes(keyword);
+}
+
+// ---- Entry list rendering ----
+function renderEntryList() {
+  $entryList.innerHTML = '';
+
+  if (FILTERED.length === 0) {
+    $entryList.innerHTML = '<div style="padding:40px;text-align:center;color:var(--text-dim)">No matching entries</div>';
+    return;
+  }
+
+  const fragment = document.createDocumentFragment();
+  for (const entry of FILTERED) {
+    const row = document.createElement('div');
+    row.className = 'entry-row' + (SELECTED_ENTRY && SELECTED_ENTRY.seq === entry.seq ? ' selected' : '');
+    row.dataset.seq = entry.seq;
+
+    const statusIcon = (!entry.error && entry.status_code === 200) ? '✅' : '❌';
+    const durStr = entry.duration_ms < 1 ? '<1ms' : `${Math.round(entry.duration_ms)}ms`;
+
+    row.innerHTML = `
+      <span class="entry-seq">#${entry.seq}</span>
+      <span class="entry-status">${statusIcon}</span>
+      <span class="entry-type ${entry.endpoint_type}">${entry.endpoint_type}</span>
+      <span class="entry-duration">${durStr}</span>
+      <span class="entry-context" title="${esc(entry.test_context)}">${esc(shortContext(entry.test_context))}</span>
+    `;
+    row.addEventListener('click', () => selectEntry(entry));
+    fragment.appendChild(row);
+  }
+  $entryList.appendChild(fragment);
+}
+
+// ---- Entry selection & detail panel ----
+function selectEntry(entry) {
+  SELECTED_ENTRY = entry;
+
+  $entryList.querySelectorAll('.entry-row').forEach(el => {
+    el.classList.toggle('selected', parseInt(el.dataset.seq) === entry.seq);
+  });
+
+  $detailPanel.classList.add('visible');
+  $detailTitle.textContent = `#${entry.seq} — ${entry.endpoint_type}`;
+
+  $detailMetaTable.innerHTML = `
+    <tr><td>Sequence</td><td>#${entry.seq}</td></tr>
+    <tr><td>Timestamp</td><td>${esc(entry.timestamp)}</td></tr>
+    <tr><td>Test</td><td style="word-break:break-all">${esc(entry.test_context)}</td></tr>
+    <tr><td>Endpoint</td><td><span class="entry-type ${entry.endpoint_type}">${entry.endpoint_type}</span></td></tr>
+    <tr><td>URL</td><td style="word-break:break-all;font-family:monospace;font-size:11px">${esc(entry.url)}</td></tr>
+    <tr><td>Status</td><td>${entry.status_code}</td></tr>
+    <tr><td>Duration</td><td>${entry.duration_ms}ms</td></tr>
+    <tr><td>Thread</td><td>${entry.thread_id || '—'}</td></tr>
+    ${entry.error ? `<tr><td>Error</td><td style="color:var(--error)">${esc(entry.error)}</td></tr>` : ''}
+  `;
+
+  $detailPayloads.innerHTML = '';
+  renderPayloadSection('Request', entry, 'req');
+  renderPayloadSection('Response', entry, 'res');
+}
+
+function renderPayloadSection(label, entry, kind) {
+  const section = document.createElement('div');
+  section.className = 'payload-section';
+
+  const header = document.createElement('div');
+  header.className = 'payload-header';
+  header.innerHTML = `<h3>${label}</h3><span class="toggle">▼</span>`;
+
+  const content = document.createElement('div');
+  content.className = 'payload-content';
+
+  let collapsed = false;
+  header.addEventListener('click', () => {
+    collapsed = !collapsed;
+    content.classList.toggle('collapsed', collapsed);
+    header.querySelector('.toggle').textContent = collapsed ? '▶' : '▼';
+  });
+
+  section.appendChild(header);
+  section.appendChild(content);
+  $detailPayloads.appendChild(section);
+
+  const bodyKey = kind === 'req' ? 'req_body' : 'res_body';
+  const hasKey = bodyKey in entry;
+  const body = entry[bodyKey];
+
+  if (hasKey) {
+    if (body === null || body === undefined) {
+      content.innerHTML = `<span class="payload-error" style="color:var(--text-dim)">No ${kind === 'req' ? 'request' : 'response'} body (null)</span>`;
+      return;
+    }
+    try {
+      content.textContent = JSON.stringify(body, null, 2);
+      if (kind === 'res' && entry.endpoint_type === 'llm') {
+        renderVerdict(body, section);
+      }
+    } catch (e) {
+      content.innerHTML = `<span class="payload-error">Render error: ${esc(e.message)}</span>`;
+    }
+    return;
+  }
+
+  const payloads = entry.payloads || {};
+  const relPath = payloads[kind];
+  if (!relPath) {
+    content.innerHTML = '<span class="payload-error">No payload data in index</span>';
+    return;
+  }
+
+  content.innerHTML = '<span class="payload-loading">Loading…</span>';
+  fetch(relPath).then(resp => {
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    return resp.json();
+  }).then(data => {
+    content.textContent = JSON.stringify(data, null, 2);
+    if (kind === 'res' && entry.endpoint_type === 'llm') {
+      renderVerdict(data, section);
+    }
+  }).catch(() => {
+    content.innerHTML = '<span class="payload-error">Payload not available (schema v1 index opened from file://)</span>';
+  });
+}
+
+function renderVerdict(response, parentSection) {
+  const content = extractContent(response);
+  if (!content) return;
+
+  const verdict = parseVerdict(content);
+  if (!verdict) return;
+
+  const div = document.createElement('div');
+  div.className = 'verdict-section';
+
+  let badgeClass = 'unknown';
+  let badgeText = 'Unknown';
+  if (verdict.is_contradiction === true) {
+    badgeClass = 'positive';
+    badgeText = '✓ Contradiction';
+  } else if (verdict.is_contradiction === false) {
+    badgeClass = 'negative';
+    badgeText = '✗ Not contradiction';
+  }
+
+  let html = `<h3>LLM Verdict</h3>`;
+  html += `<span class="verdict-badge ${badgeClass}">${badgeText}</span>`;
+
+  if (verdict.confidence !== undefined) {
+    html += ` <span style="font-size:11px;color:var(--text-dim)">confidence: ${verdict.confidence}</span>`;
+  }
+  if (verdict.type) {
+    html += ` <span style="font-size:11px;color:var(--text-dim)">type: ${verdict.type}</span>`;
+  }
+  if (verdict.reasoning) {
+    html += `<div style="margin-top:6px;font-size:11px;color:var(--text-dim);line-height:1.5">${esc(verdict.reasoning)}</div>`;
+  }
+
+  div.innerHTML = html;
+  parentSection.appendChild(div);
+}
+
+function extractContent(response) {
+  if (!response || !response.choices || !response.choices.length) return null;
+  const msg = response.choices[0].message;
+  if (!msg) return null;
+  return msg.content || null;
+}
+
+function parseVerdict(content) {
+  if (typeof content !== 'string') return null;
+  let cleaned = content.trim();
+
+  cleaned = cleaned.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+
+  if (cleaned.startsWith('```')) {
+    const firstNl = cleaned.indexOf('\n');
+    if (firstNl >= 0) cleaned = cleaned.slice(firstNl + 1);
+    if (cleaned.trimEnd().endsWith('```')) {
+      cleaned = cleaned.trimEnd().slice(0, -3).trimEnd();
+    }
+  }
+
+  try {
+    const parsed = JSON.parse(cleaned);
+    if (typeof parsed === 'object' && parsed !== null) return parsed;
+  } catch {}
+
+  return null;
+}
+
+// ---- Utilities ----
+function esc(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+function shortContext(ctx) {
+  if (!ctx) return '';
+  const parts = ctx.split('.');
+  if (parts.length >= 3) return parts.slice(1).join('.');
+  if (parts.length === 2) return parts[1];
+  return ctx;
+}
+
+function debounce(fn, ms) {
+  let timer;
+  return function(...args) {
+    clearTimeout(timer);
+    timer = setTimeout(() => fn.apply(this, args), ms);
+  };
+}
+
+function showToast(msg) {
+  $toast.textContent = msg;
+  $toast.style.display = 'block';
+  setTimeout(() => { $toast.style.display = 'none'; }, 3000);
+}
+
+// ---- Start ----
+init();
+</script>
+</body>
+</html>

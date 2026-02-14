@@ -14,6 +14,8 @@
         <nav id="main-nav">
             <a href="/ui/" class="active">Dashboard</a>
             <a href="/ui/files.html">File Browser</a>
+            <a href="/ui/timeline.html">Timeline</a>
+            <a href="/ui/requests.html">Requests</a>
         </nav>
 
         <!-- Stats -->
@@ -93,7 +95,7 @@
 
                 let html = '<table class="run-table">';
                 html += '<thead><tr>';
-                html += '<th>Run ID</th><th>Target</th><th>Mode</th><th>Status</th><th>Created</th><th>Events</th><th>Requests</th>';
+                html += '<th>Run ID</th><th>Target</th><th>Mode</th><th>Status</th><th>Created</th><th>Events</th><th>Requests</th><th>Viewers</th>';
                 html += '</tr></thead><tbody>';
 
                 for (const run of runs) {
@@ -105,6 +107,7 @@
                     html += `<td>${formatTime(run.created)}</td>`;
                     html += `<td>${run.event_count}</td>`;
                     html += `<td>${run.request_count}</td>`;
+                    html += `<td style="font-size:0.85em;"><a href="/ui/timeline.html?run=${run.run_id}" title="Timeline viewer">📊</a> <a href="/ui/requests.html?run=${run.run_id}" title="Request explorer">🔍</a></td>`;
                     html += '</tr>';
                 }
 

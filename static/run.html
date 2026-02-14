@@ -15,6 +15,8 @@
             <a href="/ui/">Dashboard</a>
             <a href="#" class="active">Run Detail</a>
             <a href="/ui/files.html">File Browser</a>
+            <a href="/ui/timeline.html" id="nav-timeline">Timeline</a>
+            <a href="/ui/requests.html" id="nav-requests">Requests</a>
         </nav>
 
         <!-- Run info -->
@@ -70,6 +72,16 @@
             return `<span class="status status-${status}">${status}</span>`;
         }
 
+        // Update viewer links to include run ID
+        function updateViewerLinks() {
+            if (!runId) return;
+            const timLink = document.getElementById('nav-timeline');
+            const reqLink = document.getElementById('nav-requests');
+            if (timLink) timLink.href = `/ui/timeline.html?run=${runId}`;
+            if (reqLink) reqLink.href = `/ui/requests.html?run=${runId}`;
+        }
+        updateViewerLinks();
+
         async function loadRun() {
             if (!runId) {
                 document.getElementById('run-subtitle').textContent = 'No run ID specified';
@@ -94,6 +106,10 @@
                 if (run.description) {
                     infoHtml += `<tr><td><strong>Description</strong></td><td>${run.description}</td></tr>`;
                 }
+                infoHtml += `<tr><td><strong>Viewers</strong></td><td>`;
+                infoHtml += `<a href="/ui/timeline.html?run=${runId}" style="color:var(--accent);text-decoration:none;margin-right:12px;">📊 Timeline Viewer</a>`;
+                infoHtml += `<a href="/ui/requests.html?run=${runId}" style="color:var(--accent);text-decoration:none;">🔍 Request Explorer</a>`;
+                infoHtml += `</td></tr>`;
                 infoHtml += '</table>';
 
                 if (run.summary) {
